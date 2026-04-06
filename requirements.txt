@@ -1,0 +1,7 @@
+requests
+click
+python-dotenv
+openai>=1.0
+pydantic>=2.0
+pyyaml>=6.0
+pyyaml==6.0.3
