@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 MAX_RETRIES = 3
 RETRY_DELAY_BASE = 1
+MIN_PAGE_SIZE = 5
 
 
 def retry_api_call(func: Callable, max_retries: int = MAX_RETRIES, *args, **kwargs):
@@ -43,8 +44,10 @@ def retry_api_call(func: Callable, max_retries: int = MAX_RETRIES, *args, **kwar
                 last_exception = e
                 continue
             if 500 <= status_code < 600 and retries < max_retries:
-                wait_time = RETRY_DELAY_BASE * (2 ** retries)
-                logger.warning(f"Server error {status_code}. Retrying in {wait_time} seconds...")
+                wait_time = RETRY_DELAY_BASE * (2**retries)
+                logger.warning(
+                    f"Server error {status_code}. Retrying in {wait_time} seconds..."
+                )
                 time.sleep(wait_time)
                 retries += 1
                 last_exception = e
@@ -52,7 +55,7 @@ def retry_api_call(func: Callable, max_retries: int = MAX_RETRIES, *args, **kwar
             raise
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if retries < max_retries:
-                wait_time = RETRY_DELAY_BASE * (2 ** retries)
+                wait_time = RETRY_DELAY_BASE * (2**retries)
                 logger.warning(f"Connection error. Retrying in {wait_time} seconds...")
                 time.sleep(wait_time)
                 retries += 1
@@ -61,8 +64,10 @@ def retry_api_call(func: Callable, max_retries: int = MAX_RETRIES, *args, **kwar
             raise
         except Exception as e:
             if retries < max_retries:
-                wait_time = RETRY_DELAY_BASE * (2 ** retries)
-                logger.warning(f"Unexpected error: {str(e)}. Retrying in {wait_time} seconds...")
+                wait_time = RETRY_DELAY_BASE * (2**retries)
+                logger.warning(
+                    f"Unexpected error: {str(e)}. Retrying in {wait_time} seconds..."
+                )
                 time.sleep(wait_time)
                 retries += 1
                 last_exception = e
@@ -134,7 +139,12 @@ class PlatformClient(ABC):
         self.token = token
 
     @abstractmethod
-    def fetch_prs(self, cursor: Optional[str] = None, page_size: int = 50, start_date: Optional[datetime] = None) -> dict:
+    def fetch_prs(
+        self,
+        cursor: Optional[str] = None,
+        page_size: int = 50,
+        start_date: Optional[datetime] = None,
+    ) -> dict:
         pass
 
     @abstractmethod
@@ -170,7 +180,12 @@ class GitHubClient(PlatformClient):
         if self.token:
             self.headers["Authorization"] = f"Bearer {self.token}"
 
-    def fetch_prs(self, cursor: Optional[str] = None, page_size: int = 50, start_date: Optional[datetime] = None) -> dict:
+    def fetch_prs(
+        self,
+        cursor: Optional[str] = None,
+        page_size: int = 50,
+        start_date: Optional[datetime] = None,
+    ) -> dict:
         query = """
             query($owner: String!, $name: String!, $cursor: String, $page_size: Int!) {
             repository(owner: $owner, name: $name) {
@@ -233,28 +248,46 @@ class GitHubClient(PlatformClient):
         if start_date:
             query_string += f" merged:>={start_date}"
 
-        variables = {
-            "owner": self.owner,
-            "name": self.repo_name,
-            "queryString": query_string,
-            "cursor": cursor,
-            "page_size": page_size,
-        }
+        current_page_size = page_size
+        while True:
+            variables = {
+                "owner": self.owner,
+                "name": self.repo_name,
+                "queryString": query_string,
+                "cursor": cursor,
+                "page_size": current_page_size,
+            }
 
-        def _make_request():
-            response = requests.post(
-                f"{self.base_url}/graphql",
-                json={"query": query, "variables": variables},
-                headers=self.headers,
-                timeout=30,
-            )
-            response.raise_for_status()
-            return response.json()
+            def _make_request():
+                response = requests.post(
+                    f"{self.base_url}/graphql",
+                    json={"query": query, "variables": variables},
+                    headers=self.headers,
+                    timeout=30,
+                )
+                response.raise_for_status()
+                return response.json()
 
-        return retry_api_call(_make_request)
+            try:
+                return retry_api_call(_make_request)
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 504:
+                    if current_page_size > MIN_PAGE_SIZE:
+                        current_page_size = current_page_size // 2
+                        logger.warning(
+                            f"504 Gateway Timeout with page_size={current_page_size * 2}, "
+                            f"retrying with page_size={current_page_size}"
+                        )
+                        continue
+                    logger.warning(
+                        f"504 Gateway Timeout at minimum page_size={current_page_size}, "
+                        f"giving up page-size backoff"
+                    )
+                raise
 
     def fetch_issue(self, issue_number: int) -> Optional[dict]:
         try:
+
             def _make_request():
                 response = requests.get(
                     f"{self.base_url}/repos/{self.repo_full_name}/issues/{issue_number}",
@@ -303,7 +336,11 @@ class GitHubClient(PlatformClient):
         repo = result.get("data", {}).get("repository", {})
         open_count = repo.get("open", {}).get("totalCount", 0)
         closed_count = repo.get("closed", {}).get("totalCount", 0)
-        return {"open": open_count, "closed": closed_count, "total": open_count + closed_count}
+        return {
+            "open": open_count,
+            "closed": closed_count,
+            "total": open_count + closed_count,
+        }
 
     def get_repo_url(self, include_token: bool = False) -> str:
         if include_token and self.token:
@@ -346,6 +383,7 @@ class GitHubClient(PlatformClient):
         diff_headers = self.headers.copy()
         diff_headers["Accept"] = "application/vnd.github.v3.diff"
         try:
+
             def _make_request():
                 response = requests.get(
                     f"{self.base_url}/repos/{self.repo_full_name}/compare/{base_commit}...{head_commit}",
@@ -368,32 +406,70 @@ class BitbucketClient(PlatformClient):
         if self.token:
             self.headers["Authorization"] = f"Bearer {self.token}"
 
-    def fetch_prs(self, cursor: Optional[str] = None, page_size: int = 50, start_date: Optional[datetime] = None) -> dict:
+    def fetch_prs(
+        self,
+        cursor: Optional[str] = None,
+        page_size: int = 50,
+        start_date: Optional[datetime] = None,
+    ) -> dict:
+        current_page_size = page_size
         if cursor and cursor.startswith("http"):
             request_url = cursor
-            params = None
+            base_params = None
         else:
             request_url = f"{self.base_url}/repositories/{self.owner}/{self.repo_name}/pullrequests"
-            params = {"state": "MERGED", "pagelen": page_size, "sort": "-created_on"}
+            base_params = {"state": "MERGED", "sort": "-created_on"}
             if cursor:
-                params["page"] = cursor
+                base_params["page"] = cursor
             if start_date:
-                params["q"] = f"created_on>={start_date.isoformat()}"
+                base_params["q"] = f"created_on>={start_date.isoformat()}"
 
-        def _make_request():
-            response = requests.get(request_url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
-            return response.json()
+        while True:
+            params = (
+                {**base_params, "pagelen": current_page_size}
+                if base_params is not None
+                else None
+            )
 
-        data = retry_api_call(_make_request)
+            def _make_request():
+                response = requests.get(
+                    request_url, headers=self.headers, params=params, timeout=30
+                )
+                response.raise_for_status()
+                return response.json()
+
+            try:
+                data = retry_api_call(_make_request)
+                break
+            except requests.exceptions.HTTPError as e:
+                if (
+                    base_params is not None
+                    and e.response is not None
+                    and e.response.status_code == 504
+                ):
+                    if current_page_size > MIN_PAGE_SIZE:
+                        current_page_size = current_page_size // 2
+                        logger.warning(
+                            f"504 Gateway Timeout with page_size={current_page_size * 2}, "
+                            f"retrying with page_size={current_page_size}"
+                        )
+                        continue
+                    logger.warning(
+                        f"504 Gateway Timeout at minimum page_size={current_page_size}, "
+                        f"giving up page-size backoff"
+                    )
+                raise
         pr_nodes = []
         for pr in data.get("values", []):
             files_url = pr.get("links", {}).get("diffstat", {}).get("href", "")
             files = []
             if files_url:
                 try:
+
                     def _get_files():
-                        files_response = requests.get(files_url, headers=self.headers, timeout=30)
+                        files_response = requests.get(
+                            files_url, headers=self.headers, timeout=30
+                        )
                         files_response.raise_for_status()
                         return files_response.json()
 
@@ -401,7 +477,9 @@ class BitbucketClient(PlatformClient):
                     for file_info in files_data.get("values", []):
                         files.append(
                             {
-                                "path": file_info.get("new", {}).get("path", file_info.get("old", {}).get("path", "")),
+                                "path": file_info.get("new", {}).get(
+                                    "path", file_info.get("old", {}).get("path", "")
+                                ),
                                 "changeType": "ADDED"
                                 if file_info.get("status") == "added"
                                 else "DELETED"
@@ -415,35 +493,54 @@ class BitbucketClient(PlatformClient):
                     pass
 
             linked_issues = []
-            issue_numbers = self.extract_issue_number_from_text(pr.get("description", "") or "")
+            issue_numbers = self.extract_issue_number_from_text(
+                pr.get("description", "") or ""
+            )
             for issue_num in issue_numbers:
                 issue_data = self.fetch_issue(issue_num)
                 if issue_data:
                     linked_issues.append(issue_data)
 
             author_info = pr.get("author", {}) or {}
-            author_login = author_info.get("display_name") or author_info.get("username") or ""
+            author_login = (
+                author_info.get("display_name") or author_info.get("username") or ""
+            )
 
             pr_nodes.append(
                 {
                     "number": pr.get("id"),
                     "title": pr.get("title", ""),
                     "body": pr.get("description", "") or "",
-                    "baseRefOid": pr.get("destination", {}).get("commit", {}).get("hash", ""),
-                    "headRefOid": pr.get("source", {}).get("commit", {}).get("hash", ""),
+                    "baseRefOid": pr.get("destination", {})
+                    .get("commit", {})
+                    .get("hash", ""),
+                    "headRefOid": pr.get("source", {})
+                    .get("commit", {})
+                    .get("hash", ""),
                     "mergedAt": pr.get("closed_on", pr.get("updated_on", "")),
                     "createdAt": pr.get("created_on", ""),
                     "url": pr.get("links", {}).get("html", {}).get("href", ""),
-                    "author": {"login": author_login, "isBot": _is_bot_username(author_login), "__typename": "User"},
-                    "baseRepository": {"nameWithOwner": f"{self.owner}/{self.repo_name}"},
-                    "headRepository": {"nameWithOwner": f"{self.owner}/{self.repo_name}"},
+                    "author": {
+                        "login": author_login,
+                        "isBot": _is_bot_username(author_login),
+                        "__typename": "User",
+                    },
+                    "baseRepository": {
+                        "nameWithOwner": f"{self.owner}/{self.repo_name}"
+                    },
+                    "headRepository": {
+                        "nameWithOwner": f"{self.owner}/{self.repo_name}"
+                    },
                     "files": {"nodes": files},
                     "closingIssuesReferences": {"nodes": linked_issues},
                     "labels": {"nodes": []},
                 }
             )
 
-        page_info = {"hasNextPage": data.get("next") is not None, "endCursor": data.get("next")}
+        page_info = {
+            "hasNextPage": data.get("next") is not None,
+            "endCursor": data.get("next"),
+        }
         primary_language_name = None
         try:
             languages = self.fetch_repo_languages()
@@ -542,7 +639,11 @@ class BitbucketClient(PlatformClient):
 
             open_count = _count('state="new" OR state="open"')
             closed_count = _count('state="resolved" OR state="closed"')
-            return {"open": open_count, "closed": closed_count, "total": open_count + closed_count}
+            return {
+                "open": open_count,
+                "closed": closed_count,
+                "total": open_count + closed_count,
+            }
         except Exception:
             return {"open": 0, "closed": 0, "total": 0}
 
@@ -561,7 +662,13 @@ class BitbucketClient(PlatformClient):
 
 
 class GitLabClient(PlatformClient):
-    def __init__(self, owner: str, repo_name: str, token: Optional[str] = None, base_url: str = "https://gitlab.com"):
+    def __init__(
+        self,
+        owner: str,
+        repo_name: str,
+        token: Optional[str] = None,
+        base_url: str = "https://gitlab.com",
+    ):
         super().__init__(owner, repo_name, token)
         self.base_url = base_url.rstrip("/")
         self.api_url = f"{self.base_url}/api/v4"
@@ -570,8 +677,18 @@ class GitLabClient(PlatformClient):
         if self.token:
             self.headers["PRIVATE-TOKEN"] = self.token
 
-    def fetch_prs(self, cursor: Optional[str] = None, page_size: int = 50, start_date: Optional[datetime] = None) -> dict:
-        params = {"state": "merged", "per_page": page_size, "order_by": "created_at", "sort": "desc"}
+    def fetch_prs(
+        self,
+        cursor: Optional[str] = None,
+        page_size: int = 50,
+        start_date: Optional[datetime] = None,
+    ) -> dict:
+        current_page_size = page_size
+        params = {
+            "state": "merged",
+            "order_by": "created_at",
+            "sort": "desc",
+        }
         if cursor:
             params["page"] = cursor
         if start_date:
@@ -579,12 +696,34 @@ class GitLabClient(PlatformClient):
 
         url = f"{self.api_url}/projects/{self.project_id}/merge_requests"
 
-        def _make_request():
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
-            return response
+        while True:
+            params["per_page"] = current_page_size
 
-        response = retry_api_call(_make_request)
+            def _make_request():
+                response = requests.get(
+                    url, headers=self.headers, params=params, timeout=30
+                )
+                response.raise_for_status()
+                return response
+
+            try:
+                response = retry_api_call(_make_request)
+                break
+            except requests.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 504:
+                    if current_page_size > MIN_PAGE_SIZE:
+                        current_page_size = current_page_size // 2
+                        logger.warning(
+                            f"504 Gateway Timeout with page_size={current_page_size * 2}, "
+                            f"retrying with page_size={current_page_size}"
+                        )
+                        continue
+                    logger.warning(
+                        f"504 Gateway Timeout at minimum page_size={current_page_size}, "
+                        f"giving up page-size backoff"
+                    )
+                raise
+
         data = response.json()
         next_page = response.headers.get("X-Next-Page", "")
 
@@ -613,16 +752,24 @@ class GitLabClient(PlatformClient):
                     "title": mr.get("title", ""),
                     "body": body,
                     "baseRefOid": diff_refs.get("base_sha", ""),
-                    "headRefOid": mr.get("sha", "") or mr_details.get("sha", "") or diff_refs.get("head_sha", ""),
+                    "headRefOid": mr.get("sha", "")
+                    or mr_details.get("sha", "")
+                    or diff_refs.get("head_sha", ""),
                     "baseRefName": mr.get("target_branch", ""),
                     "headRefName": mr.get("source_branch", ""),
                     "mergedAt": mr.get("merged_at", ""),
                     "createdAt": mr.get("created_at", ""),
                     "url": mr.get("web_url", ""),
-                    "author": {"login": author_login, "isBot": _is_bot_username(author_login), "__typename": "User"},
+                    "author": {
+                        "login": author_login,
+                        "isBot": _is_bot_username(author_login),
+                        "__typename": "User",
+                    },
                     "files": {"nodes": files},
                     "closingIssuesReferences": {"nodes": linked_issues},
-                    "labels": {"nodes": [{"name": label} for label in (mr.get("labels") or [])]},
+                    "labels": {
+                        "nodes": [{"name": label} for label in (mr.get("labels") or [])]
+                    },
                 }
             )
 
@@ -641,7 +788,10 @@ class GitLabClient(PlatformClient):
                     "owner": {"login": self.owner},
                     "name": self.repo_name,
                     "pullRequests": {
-                        "pageInfo": {"hasNextPage": bool(next_page), "endCursor": next_page or None},
+                        "pageInfo": {
+                            "hasNextPage": bool(next_page),
+                            "endCursor": next_page or None,
+                        },
                         "nodes": pr_nodes,
                     },
                 }
@@ -674,8 +824,16 @@ class GitLabClient(PlatformClient):
             files = []
             for change in mr_data.get("changes", []):
                 diff_text = change.get("diff", "")
-                additions = sum(1 for line in diff_text.split("\n") if line.startswith("+") and not line.startswith("+++"))
-                deletions = sum(1 for line in diff_text.split("\n") if line.startswith("-") and not line.startswith("---"))
+                additions = sum(
+                    1
+                    for line in diff_text.split("\n")
+                    if line.startswith("+") and not line.startswith("+++")
+                )
+                deletions = sum(
+                    1
+                    for line in diff_text.split("\n")
+                    if line.startswith("-") and not line.startswith("---")
+                )
                 if change.get("new_file"):
                     change_type = "ADDED"
                 elif change.get("deleted_file"):
@@ -724,7 +882,9 @@ class GitLabClient(PlatformClient):
                 "number": issue.get("iid"),
                 "title": issue.get("title", ""),
                 "body": issue.get("description", "") or "",
-                "state": "CLOSED" if issue.get("state") == "closed" else issue.get("state", "").upper(),
+                "state": "CLOSED"
+                if issue.get("state") == "closed"
+                else issue.get("state", "").upper(),
                 "__typename": "Issue",
             }
         except Exception:
@@ -741,9 +901,18 @@ class GitLabClient(PlatformClient):
             return []
         issue_numbers = []
         issue_numbers.extend([int(m) for m in re.findall(r"(?<!\!)#(\d+)", text)])
-        issue_numbers.extend([int(m) for m in re.findall(r"https?://[^/\s]+/.+?/-/issues/(\d+)", text)])
         issue_numbers.extend(
-            [int(m) for m in re.findall(r"(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)", text, flags=re.IGNORECASE)]
+            [int(m) for m in re.findall(r"https?://[^/\s]+/.+?/-/issues/(\d+)", text)]
+        )
+        issue_numbers.extend(
+            [
+                int(m)
+                for m in re.findall(
+                    r"(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)",
+                    text,
+                    flags=re.IGNORECASE,
+                )
+            ]
         )
         return list(set(issue_numbers))
 
@@ -759,7 +928,9 @@ class GitLabClient(PlatformClient):
             languages = retry_api_call(_make_request)
             if not languages:
                 return None
-            return {lang: int(float(weight) * 100) for lang, weight in languages.items()}
+            return {
+                lang: int(float(weight) * 100) for lang, weight in languages.items()
+            }
         except Exception as e:
             logger.debug(f"Failed to fetch repository languages from GitLab API: {e}")
             return None
@@ -790,7 +961,11 @@ class GitLabClient(PlatformClient):
 
             open_count = _count("opened")
             closed_count = _count("closed")
-            return {"open": open_count, "closed": closed_count, "total": open_count + closed_count}
+            return {
+                "open": open_count,
+                "closed": closed_count,
+                "total": open_count + closed_count,
+            }
         except Exception:
             return {"open": 0, "closed": 0, "total": 0}
 
