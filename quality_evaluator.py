@@ -1,9 +1,17 @@
 import json
 import logging
 import os
+import random
 import re
+import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+
+from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+
+_RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
+_MAX_RETRIES = 8
+_BASE_DELAY = 1.0
 
 logger = logging.getLogger(__name__)
 
@@ -692,8 +700,6 @@ class QualityEvaluator:
         )
 
     def _call_llm(self, prompt: str) -> Optional[str]:
-        import requests
-
         if not self.api_key:
             logger.error(f"No API key configured for {self.llm_provider}")
             return None
@@ -729,36 +735,35 @@ class QualityEvaluator:
             return None
 
     def _call_openai(self, prompt: str) -> Optional[str]:
-        import requests
-
-        try:
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {self.api_key}",
-                },
-                json={
-                    "model": self.openai_model,
-                    "messages": [
+        client = OpenAI(api_key=self.api_key)
+        last_err: Exception | None = None
+        for attempt in range(_MAX_RETRIES):
+            try:
+                response = client.chat.completions.create(
+                    model=self.openai_model,
+                    messages=[
                         {
                             "role": "system",
                             "content": "You are a code review assistant. Respond only with valid JSON.",
                         },
                         {"role": "user", "content": prompt},
                     ],
-                    "temperature": 0,
-                },
-                timeout=120,
-            )
-            response.raise_for_status()
-            return response.json()["choices"][0]["message"]["content"]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"OpenAI API failed: {e}")
-            return None
-        except (KeyError, IndexError) as e:
-            logger.error(f"Unexpected OpenAI response: {e}")
-            return None
+                    temperature=0,
+                )
+                return response.choices[0].message.content
+            except _RETRYABLE as e:
+                last_err = e
+                delay = _BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
+                logger.warning(
+                    f"OpenAI call failed (attempt {attempt + 1}/{_MAX_RETRIES}): "
+                    f"{type(e).__name__} — retrying in {delay:.1f}s"
+                )
+                time.sleep(delay)
+            except Exception as e:
+                logger.error(f"OpenAI API failed: {e}")
+                return None
+        logger.error(f"OpenAI API failed after {_MAX_RETRIES} retries: {last_err}")
+        return None
 
     def _parse_json_response(self, response: str) -> Optional[dict]:
         if not response:

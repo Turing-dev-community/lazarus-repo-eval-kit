@@ -2993,6 +2993,7 @@ class RepoEvaluator:
             pr_number = pr.get("number")
             if self.pr_number is not None and pr_number != self.pr_number:
                 continue
+            logger.info("Running quality evaluator for %s/%s PR #%s ...", self.owner, self.repo_name, pr_number)
             entry: dict = {
                 "number": pr_number,
                 "url": pr.get("url", ""),
