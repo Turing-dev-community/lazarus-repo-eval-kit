@@ -24,15 +24,13 @@ from __future__ import annotations
 import csv
 import json
 import os
-import random
 import sys
-import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Literal
 
-from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from .taxonomy import (
@@ -42,11 +40,7 @@ from .taxonomy import (
     load_taxonomy,
     parse_diff,
 )
-
-# Transient errors safe to retry
-_RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
-_MAX_RETRIES = 8
-_BASE_DELAY = 1.0
+from llm_client import call_llm
 
 # ── Pydantic models for structured LLM output ──────────────────────────────
 
@@ -171,33 +165,16 @@ class TaxonomyClassifier:
             diff_stats=diff_stats,
         )
 
-        # 3. LLM call with retries
-        last_err: Exception | None = None
-        for attempt in range(_MAX_RETRIES):
-            try:
-                response = self.client.beta.chat.completions.parse(
-                    model=self.model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    response_format=LLMClassification,
-                    temperature=0.1,
-                )
-                break
-            except _RETRYABLE as exc:
-                last_err = exc
-                delay = _BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
-                print(
-                    f"[WARN] LLM call failed (attempt {attempt + 1}/{_MAX_RETRIES}): "
-                    f"{type(exc).__name__} — retrying in {delay:.1f}s",
-                    file=sys.stderr,
-                )
-                time.sleep(delay)
-        else:
-            raise last_err  # type: ignore[misc]
-
-        llm: LLMClassification = response.choices[0].message.parsed
+        llm: LLMClassification = call_llm(
+            [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            model=self.model,
+            client=self.client,
+            temperature=0.1,
+            response_format=LLMClassification,
+        )
 
         # 4. Merge rule-based signals into LLM output
         return self._merge(llm, diff_stats)

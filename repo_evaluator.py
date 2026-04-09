@@ -2646,7 +2646,6 @@ class RepoEvaluator:
         f2p_timeout: int = 600,
         pr_number: Optional[int] = None,
         skip_pr_rubrics: bool = False,
-        pr_rubrics_provider: str = "openai",
     ):
         self.repo_path = repo_path
         self.owner = owner
@@ -2664,7 +2663,6 @@ class RepoEvaluator:
         self.pr_number = pr_number
         self.language_config = load_language_config()
         self.skip_pr_rubrics = skip_pr_rubrics
-        self.pr_rubrics_provider = pr_rubrics_provider
 
     def evaluate(self) -> AnalysisReport:
         if not self.platform_client:
@@ -2986,7 +2984,7 @@ class RepoEvaluator:
             min_code_changes=self.min_code_changes,
             start_date=self.start_date,
         )
-        qe = QualityEvaluator(llm_provider=self.pr_rubrics_provider)
+        qe = QualityEvaluator()
         results: List[dict] = []
 
         for pr in pr_analysis.accepted_prs:
@@ -3572,13 +3570,6 @@ def main():
         help="Skip LLM benchmark rubrics on accepted PRs (issue/patch/test clarity, FN/FP)",
     )
     parser.add_argument(
-        "--pr-rubrics-provider",
-        type=str,
-        choices=("gemini", "openai"),
-        default="openai",
-        help="LLM provider for PR rubrics: openai (OPENAI_API_KEY, default model gpt-5.1) or gemini (GEMINI_API_KEY)",
-    )
-    parser.add_argument(
         "--taxonomy-model",
         type=str,
         default=os.environ.get("TAXONOMY_MODEL", "gpt-4o"),
@@ -3593,8 +3584,8 @@ def main():
     parser.add_argument(
         "--taxonomy-concurrency",
         type=int,
-        default=int(os.environ.get("TAXONOMY_CONCURRENCY", "8")),
-        help="Max parallel taxonomy LLM calls per repo (default: 8 or TAXONOMY_CONCURRENCY env)",
+        default=int(os.environ.get("LLM_CONCURRENCY", "4")),
+        help="Max parallel taxonomy LLM calls per repo (default: 4 or LLM_CONCURRENCY env)",
     )
 
     args = parser.parse_args()
@@ -3602,7 +3593,7 @@ def main():
     _needs_openai = (
         (not args.skip_quality_checks and not args.skip_quality_llm)
         or not args.skip_taxonomy
-        or (not args.skip_pr_rubrics and args.pr_rubrics_provider == "openai")
+        or not args.skip_pr_rubrics
     )
     if _needs_openai and not os.environ.get("OPENAI_API_KEY"):
         print(
@@ -3688,7 +3679,6 @@ def main():
             f2p_timeout=args.f2p_timeout,
             pr_number=args.pr_number,
             skip_pr_rubrics=args.skip_pr_rubrics,
-            pr_rubrics_provider=args.pr_rubrics_provider,
         )
 
         report = evaluator.evaluate()

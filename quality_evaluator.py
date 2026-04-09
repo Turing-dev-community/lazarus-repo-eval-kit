@@ -1,17 +1,13 @@
 import json
 import logging
 import os
-import random
 import re
-import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+from openai import OpenAI
 
-_RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
-_MAX_RETRIES = 8
-_BASE_DELAY = 1.0
+from llm_client import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -432,14 +428,12 @@ DEFAULT_OPENAI_MODEL = "gpt-5.1"
 class QualityEvaluator:
     def __init__(
         self,
-        llm_provider: str = "openai",
         api_key: Optional[str] = None,
         quality_threshold: int = 1,
         max_diff_lines: int = 1000,
         openai_model: Optional[str] = None,
     ):
-        self.llm_provider = llm_provider.lower()
-        self.api_key = api_key or self._get_api_key()
+        self.api_key = api_key if api_key is not None else self._get_api_key()
         self.quality_threshold = quality_threshold
         self.max_diff_lines = max_diff_lines
         self.openai_model = (
@@ -447,14 +441,11 @@ class QualityEvaluator:
             or os.environ.get("OPENAI_QUALITY_MODEL", "").strip()
             or DEFAULT_OPENAI_MODEL
         )
+        self.client = OpenAI(api_key=self.api_key)
         self.last_rejection_reason = None
 
     def _get_api_key(self) -> str:
-        if self.llm_provider == "gemini":
-            return os.environ.get("GEMINI_API_KEY", "")
-        elif self.llm_provider == "openai":
-            return os.environ.get("OPENAI_API_KEY", "")
-        return ""
+        return os.environ.get("OPENAI_API_KEY", "")
 
     def check_f2p_p2p(
         self, src_diff: str, test_diff: str
@@ -702,70 +693,23 @@ class QualityEvaluator:
     def _call_llm(self, prompt: str) -> Optional[str]:
         if not self.api_key:
             raise ValueError(
-                f"No API key configured for {self.llm_provider}. "
-                "Set OPENAI_API_KEY (or GEMINI_API_KEY) in your environment."
+                "No API key configured. Set OPENAI_API_KEY in your environment."
             )
-        try:
-            if self.llm_provider == "gemini":
-                return self._call_gemini(prompt)
-            elif self.llm_provider == "openai":
-                return self._call_openai(prompt)
-            logger.error(f"Unknown LLM provider: {self.llm_provider}")
-            return None
-        except Exception as e:
-            logger.error(f"LLM API call failed: {e}")
-            return None
-
-    def _call_gemini(self, prompt: str) -> Optional[str]:
-        import requests
-
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
-        try:
-            response = requests.post(
-                f"{url}?key={self.api_key}",
-                headers={"Content-Type": "application/json"},
-                json={"contents": [{"role": "user", "parts": [{"text": prompt}]}]},
-                timeout=120,
-            )
-            response.raise_for_status()
-            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Gemini API failed: {e}")
-            return None
-        except (KeyError, IndexError) as e:
-            logger.error(f"Unexpected Gemini response: {e}")
-            return None
+        return self._call_openai(prompt)
 
     def _call_openai(self, prompt: str) -> Optional[str]:
-        client = OpenAI(api_key=self.api_key)
-        last_err: Exception | None = None
-        for attempt in range(_MAX_RETRIES):
-            try:
-                response = client.chat.completions.create(
-                    model=self.openai_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a code review assistant. Respond only with valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0,
-                )
-                return response.choices[0].message.content
-            except _RETRYABLE as e:
-                last_err = e
-                delay = _BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
-                logger.warning(
-                    f"OpenAI call failed (attempt {attempt + 1}/{_MAX_RETRIES}): "
-                    f"{type(e).__name__} — retrying in {delay:.1f}s"
-                )
-                time.sleep(delay)
-            except Exception as e:
-                logger.error(f"OpenAI API failed: {e}")
-                return None
-        logger.error(f"OpenAI API failed after {_MAX_RETRIES} retries: {last_err}")
-        return None
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a code review assistant. Respond only with valid JSON.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            return call_llm(messages, model=self.openai_model, client=self.client, temperature=0)
+        except Exception as e:
+            logger.error(f"OpenAI API failed: {e}")
+            return None
 
     def _parse_json_response(self, response: str) -> Optional[dict]:
         if not response:

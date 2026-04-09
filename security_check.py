@@ -1100,39 +1100,38 @@ Notes:
 - false_positives should list automated findings you are rejecting with a reason
 """
 
-    for attempt in range(3):
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                temperature=0,
-                messages=[
-                    {"role": "system", "content": _LLM_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            raw = resp.choices[0].message.content.strip()
-            # Strip accidental markdown fences
-            raw = re.sub(r"```(?:json)?", "", raw).strip()
-            start, end = raw.find("{"), raw.rfind("}") + 1
-            if start >= 0 and end > start:
-                raw = raw[start:end]
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            if attempt == 2:
-                return {
-                    "error": "JSON parse failed",
-                    "findings": [],
-                    "false_positives": [],
-                    "summary": "",
-                }
-        except Exception as exc:
-            return {
-                "error": str(exc),
-                "findings": [],
-                "false_positives": [],
-                "summary": "",
-            }
-    return {}
+    from llm_client import call_llm
+    try:
+        raw = call_llm(
+            [
+                {"role": "system", "content": _LLM_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            model=model,
+            client=client,
+            temperature=0,
+        )
+        raw = raw.strip()
+        # Strip accidental markdown fences
+        raw = re.sub(r"```(?:json)?", "", raw).strip()
+        start, end = raw.find("{"), raw.rfind("}") + 1
+        if start >= 0 and end > start:
+            raw = raw[start:end]
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "error": "JSON parse failed",
+            "findings": [],
+            "false_positives": [],
+            "summary": "",
+        }
+    except Exception as exc:
+        return {
+            "error": str(exc),
+            "findings": [],
+            "false_positives": [],
+            "summary": "",
+        }
 
 
 # ---------------------------------------------------------------------------
