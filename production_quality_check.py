@@ -836,6 +836,7 @@ def _c6_resource_management(
     score = 1
     evidence = []
     no_cleanup = http_no_timeout = bare_open = 0
+    has_timeout = False
     pat = PATTERNS_RESOURCE
 
     for f in files:
