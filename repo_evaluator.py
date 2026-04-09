@@ -2993,7 +2993,12 @@ class RepoEvaluator:
             pr_number = pr.get("number")
             if self.pr_number is not None and pr_number != self.pr_number:
                 continue
-            logger.info("Running quality evaluator for %s/%s PR #%s ...", self.owner, self.repo_name, pr_number)
+            logger.info(
+                "Running quality evaluator for %s/%s PR #%s ...",
+                self.owner,
+                self.repo_name,
+                pr_number,
+            )
             entry: dict = {
                 "number": pr_number,
                 "url": pr.get("url", ""),
@@ -3593,6 +3598,24 @@ def main():
     )
 
     args = parser.parse_args()
+
+    _needs_openai = (
+        (not args.skip_quality_checks and not args.skip_quality_llm)
+        or not args.skip_taxonomy
+        or (not args.skip_pr_rubrics and args.pr_rubrics_provider == "openai")
+    )
+    if _needs_openai and not os.environ.get("OPENAI_API_KEY"):
+        print(
+            "Error: OPENAI_API_KEY is required but not set.\n"
+            "\n"
+            "Add it to your .env file:\n"
+            "  OPENAI_API_KEY=sk-your-key-here\n"
+            "\n"
+            "Get a key at: https://platform.openai.com/api-keys\n"
+            "\n",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     if args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d").replace(

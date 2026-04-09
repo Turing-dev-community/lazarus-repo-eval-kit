@@ -437,10 +437,9 @@ def run_taxonomy_for_accepted_prs(
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        logger.warning(
-            "No OPENAI_API_KEY found — taxonomy classification will be skipped"
+        raise ValueError(
+            "OPENAI_API_KEY is not set. Set it in your .env file or environment."
         )
-        return dict(_EMPTY_RESULT), empty_per_pr
 
     prs: list[dict[str, Any]] = []
     for p in accepted_prs:
@@ -551,10 +550,9 @@ def run_taxonomy_classification(
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        logger.warning(
-            "No OPENAI_API_KEY found — taxonomy classification will be skipped"
+        raise ValueError(
+            "OPENAI_API_KEY is not set. Set it in your .env file or environment."
         )
-        return dict(_EMPTY_RESULT)
 
     query = _build_repo_query(owner, repo, repo_path, primary_language)
     git_log = _get_recent_git_log(repo_path)

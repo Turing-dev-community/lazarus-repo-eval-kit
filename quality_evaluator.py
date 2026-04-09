@@ -701,8 +701,10 @@ class QualityEvaluator:
 
     def _call_llm(self, prompt: str) -> Optional[str]:
         if not self.api_key:
-            logger.error(f"No API key configured for {self.llm_provider}")
-            return None
+            raise ValueError(
+                f"No API key configured for {self.llm_provider}. "
+                "Set OPENAI_API_KEY (or GEMINI_API_KEY) in your environment."
+            )
         try:
             if self.llm_provider == "gemini":
                 return self._call_gemini(prompt)

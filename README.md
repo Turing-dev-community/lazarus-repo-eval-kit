@@ -29,7 +29,7 @@ You can find more information about the Lazarus project in here https://lazarus.
 - The `requests`, `openai`, and `python-dotenv` libraries (install via `requirements.txt`)
 - Git installed on your system
 - An API token from GitHub or Bitbucket (helps avoid rate limits and access private repos)
-- An **OpenAI API key** (required for LLM-based quality checks; optional otherwise)
+- An **OpenAI API key** (required)
 
 ## Getting Started
 
@@ -41,9 +41,9 @@ Install the required dependencies:
 pip install -r requirements.txt
 ```
 
-### Environment Setup (for Quality Checks)
+### Environment Setup
 
-The quality checks feature uses OpenAI for LLM-based analysis. To configure it:
+An OpenAI API key is required to run the script. Without it, the script will exit with an error.
 
 1. Copy the example env file:
    ```bash
@@ -55,11 +55,7 @@ The quality checks feature uses OpenAI for LLM-based analysis. To configure it:
    ```
 3. Get an API key from [OpenAI's platform](https://platform.openai.com/api-keys)
 
-If you don't want to set up your own Openai account, Turing can run the script for you and we will need one of these 2 options to do so:
-1. Add us as contributor to the repository and we will run the script
-2. Give us a github token that have access to this repository and we will run the script
-
-The cost for one repository run is 1usd to 5 usd as per our past experiences, but very large repositories may exceed this.
+The cost for one repository run is typically $1–$5 based on past experience; very large repositories may cost more.
 
 
 ### Basic Usage
@@ -105,7 +101,7 @@ Each check produces two outputs: a **critical** summary and detailed **signals**
 
 ### Running Quality Checks
 
-By default, quality checks run automatically with LLM analysis (requires `OPENAI_API_KEY`):
+By default, quality checks run automatically with LLM analysis (requires `OPENAI_API_KEY` — see Environment Setup above):
 
 ```bash
 python repo_evaluator.py owner/repo --token $GITHUB_TOKEN --json
