@@ -2317,7 +2317,9 @@ class PRAnalyzer:
                     break
 
                 for pr_data in pr_nodes:
-                    if max_prs and total_prs >= max_prs:
+                    if (max_prs and total_prs >= max_prs) or (
+                        batch_limit and total_prs >= batch_limit
+                    ):
                         break
 
                     logger.info(f"Processing PR #{pr_data['number']}...")
