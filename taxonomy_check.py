@@ -4,40 +4,16 @@ import json
 import logging
 import os
 import subprocess
-from collections import Counter
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Any, Callable
 
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
-from task_taxonomy.classify import TaxonomyClassifier
+from task_taxonomy.classify import TaxonomyClassifier  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-TAXONOMY_COLUMNS = [
-    "domain_primary",
-    "domain_secondary",
-    "subdomain_tags",
-    "archetype",
-    "archetype_confidence",
-    "archetype_reasoning",
-    "horizon",
-    "horizon_estimated_files",
-    "horizon_reasoning",
-    "vertical_tags",
-    "constraint_tags",
-    "ecosystem_tags",
-    "llm_capability_tags",
-    "complexity",
-    "rule_based_signals",
-    "summary",
-]
-
-_EMPTY_RESULT: dict[str, str] = {col: "" for col in TAXONOMY_COLUMNS}
-
-_CONF_ORDER: dict[str, int] = {"high": 3, "medium": 2, "low": 1}
-_CONF_REVERSE: dict[int, str] = {3: "high", 2: "medium", 1: "low"}
 
 _README_CANDIDATES = [
     "README.md",
@@ -135,8 +111,7 @@ def _build_repo_query(
 def _serialise_result(raw: dict[str, Any]) -> dict[str, Any]:
     """Ensure list/dict values are JSON-serialised strings for CSV compatibility."""
     out: dict[str, Any] = {}
-    for col in TAXONOMY_COLUMNS:
-        val = raw.get(col, "")
+    for col, val in raw.items():
         if isinstance(val, (dict, list)):
             out[col] = json.dumps(val, default=str)
         else:
@@ -183,234 +158,6 @@ def _problem_statement_from_pr(pr: dict[str, Any], max_chars: int = 12000) -> st
     return text
 
 
-def _as_list(val: Any) -> list[Any]:
-    if val is None:
-        return []
-    if isinstance(val, list):
-        return val
-    if isinstance(val, str) and val.strip().startswith("["):
-        try:
-            parsed = json.loads(val)
-            return parsed if isinstance(parsed, list) else []
-        except Exception:
-            return []
-    return []
-
-
-def _as_dict(val: Any) -> dict[str, Any]:
-    if isinstance(val, dict):
-        return val
-    if isinstance(val, str) and val.strip().startswith("{"):
-        try:
-            parsed = json.loads(val)
-            return parsed if isinstance(parsed, dict) else {}
-        except Exception:
-            return {}
-    return {}
-
-
-def _plurality_first_order(values: Sequence[str]) -> str:
-    values = [v.strip() for v in values if v and str(v).strip()]
-    if not values:
-        return ""
-    counts = Counter(values)
-    best = max(counts.values())
-    for v in values:
-        if counts[v] == best:
-            return v
-    return values[0]
-
-
-def _median_confidence(confs: Sequence[str]) -> str:
-    levels: list[int] = []
-    for c in confs:
-        key = (c or "").lower().strip()
-        levels.append(_CONF_ORDER.get(key, 2))
-    if not levels:
-        return ""
-    if max(levels) - min(levels) >= 2:
-        return "mixed"
-    levels.sort()
-    mid = levels[len(levels) // 2]
-    return _CONF_REVERSE.get(mid, "medium")
-
-
-def _union_string_tags(rows: Sequence[dict[str, Any]], key: str) -> list[str]:
-    seen: set[str] = set()
-    for r in rows:
-        for x in _as_list(r.get(key)):
-            s = str(x).strip()
-            if s:
-                seen.add(s)
-    return sorted(seen)
-
-
-def _dedup_join_scalars(values: Sequence[str], sep: str = " | ") -> str:
-    """Sorted unique non-empty strings (domain_primary / domain_secondary aggregates)."""
-    unique = sorted({(v or "").strip() for v in values if (v or "").strip()})
-    return sep.join(unique)
-
-
-def _cap_join_reasoning(
-    pr_numbers: Sequence[Any],
-    texts: Sequence[str],
-    *,
-    max_len: int | None = 1800,
-    max_segment: int | None = 350,
-) -> str:
-    """Join reasoning as PR#n: text.
-
-    Keyword-only limits avoid mixing up ``max_len`` / ``max_segment`` with text lists.
-    ``max_len=None``: do not truncate the full joined string (every PR kept).
-    ``max_segment=None``: keep each PR's full reasoning (no per-PR cut).
-    """
-    parts: list[str] = []
-    for num, text in zip(pr_numbers, texts):
-        t = (text or "").strip().replace("\n", " ")
-        if max_segment is not None and len(t) > max_segment:
-            t = t[: max_segment - 3] + "..."
-        parts.append(f"PR#{num}: {t}")
-    s = " | ".join(parts)
-    if max_len is not None and len(s) > max_len:
-        return s[:max_len]
-    return s
-
-
-def _pr_tagged_join(
-    pr_numbers: Sequence[Any],
-    texts: Sequence[str],
-    *,
-    max_segment: int,
-    max_total: int,
-) -> str:
-    """Join per-PR values as PR#n: text (archetype, horizon_estimated_files, complexity)."""
-    parts: list[str] = []
-    for num, text in zip(pr_numbers, texts):
-        t = (text or "").strip().replace("\n", " ")
-        if len(t) > max_segment:
-            t = t[: max_segment - 3] + "..."
-        parts.append(f"PR#{num}: {t}")
-    s = " | ".join(parts)
-    return s[:max_total] if len(s) > max_total else s
-
-
-def _complexity_one_liner(raw: Any) -> str:
-    """Short per-PR complexity text (like archetype), not JSON with nested lists."""
-    d = _as_dict(raw)
-    if not d:
-        return ""
-    ft = d.get("files_touched")
-    la = d.get("lines_added")
-    lr = d.get("lines_removed")
-    langs = d.get("languages")
-    if isinstance(langs, str):
-        try:
-            langs = json.loads(langs)
-        except Exception:
-            langs = [langs] if langs else []
-    if not isinstance(langs, list):
-        langs = []
-    lang_s = ",".join(str(x) for x in langs[:10] if x)
-    chunks: list[str] = []
-    if ft is not None:
-        try:
-            chunks.append(f"{int(ft)} files")
-        except (TypeError, ValueError):
-            chunks.append(f"{ft} files")
-    if la is not None or lr is not None:
-        try:
-            la_i = int(la) if la is not None else 0
-            lr_i = int(lr) if lr is not None else 0
-            chunks.append(f"+{la_i}/-{lr_i}")
-        except (TypeError, ValueError):
-            chunks.append(f"+{la}/-{lr}")
-    if lang_s:
-        chunks.append(lang_s)
-    return " ".join(chunks) if chunks else ""
-
-
-def aggregate_pr_taxonomy(
-    rows: Sequence[dict[str, Any]],
-    pr_numbers: Sequence[Any],
-) -> dict[str, Any]:
-    """Merge successful per-PR classifier dicts into one repo-level result (pre-serialize)."""
-    if not rows:
-        return {col: "" for col in TAXONOMY_COLUMNS}
-
-    nums = list(pr_numbers)
-    dom_p_agg = _dedup_join_scalars([str(r.get("domain_primary", "")) for r in rows])
-    dom_s_agg = _dedup_join_scalars([str(r.get("domain_secondary", "")) for r in rows])
-    hz = _plurality_first_order([str(r.get("horizon", "")) for r in rows])
-    conf = _median_confidence([str(r.get("archetype_confidence", "")) for r in rows])
-
-    subdomain_agg = _union_string_tags(rows, "subdomain_tags")
-
-    arch_pr = _pr_tagged_join(
-        nums,
-        [str(r.get("archetype", "")) for r in rows],
-        max_segment=120,
-        max_total=6000,
-    )
-    arch_r = _cap_join_reasoning(
-        nums,
-        [str(r.get("archetype_reasoning", "")) for r in rows],
-        max_len=None,
-        max_segment=None,
-    )
-    hz_r = _cap_join_reasoning(
-        nums,
-        [str(r.get("horizon_reasoning", "")) for r in rows],
-        max_len=None,
-        max_segment=None,
-    )
-
-    hz_est = _pr_tagged_join(
-        nums,
-        [str(r.get("horizon_estimated_files", "")) for r in rows],
-        max_segment=400,
-        max_total=8000,
-    )
-
-    comp_segments = [_complexity_one_liner(r.get("complexity")) for r in rows]
-    complexity_pr = _pr_tagged_join(
-        nums, comp_segments, max_segment=200, max_total=12000
-    )
-
-    agg_summary = _cap_join_reasoning(
-        nums,
-        [str(r.get("summary", "")) for r in rows],
-        max_len=None,
-        max_segment=None,
-    )
-
-    rule_based_per_pr: list[dict[str, Any]] = [
-        {
-            "number": num,
-            "rule_based_signals": dict(_as_dict(r.get("rule_based_signals"))),
-        }
-        for num, r in zip(nums, rows)
-    ]
-
-    return {
-        "domain_primary": dom_p_agg,
-        "domain_secondary": dom_s_agg,
-        "subdomain_tags": subdomain_agg,
-        "archetype": arch_pr,
-        "archetype_confidence": conf,
-        "archetype_reasoning": arch_r,
-        "horizon": hz,
-        "horizon_estimated_files": hz_est,
-        "horizon_reasoning": hz_r,
-        "vertical_tags": _union_string_tags(rows, "vertical_tags"),
-        "constraint_tags": _union_string_tags(rows, "constraint_tags"),
-        "ecosystem_tags": _union_string_tags(rows, "ecosystem_tags"),
-        "llm_capability_tags": _union_string_tags(rows, "llm_capability_tags"),
-        "complexity": complexity_pr,
-        "rule_based_signals": rule_based_per_pr,
-        "summary": agg_summary,
-    }
-
-
 def run_taxonomy_for_accepted_prs(
     accepted_prs: list[dict[str, Any]],
     owner: str,
@@ -423,17 +170,15 @@ def run_taxonomy_for_accepted_prs(
     skip_taxonomy: bool = False,
     pr_number: int | None = None,
     concurrency: int = 8,
-) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+) -> list[dict[str, Any]]:
     """
-    Classify each accepted PR; aggregate successful rows into repo-level columns.
+    Classify each accepted PR and return per-PR records.
 
-    Returns (serialised TAXONOMY_COLUMNS, per_pr_records). Each per-PR record has
-    ``number``, ``instance_id``, ``repo``, then TAXONOMY_COLUMNS (serialised), or
-    ``error`` / ``summary`` on failure.
+    Each record has ``number``, ``instance_id``, ``repo``, then the classifier
+    fields (serialised), or ``error`` / ``summary`` on failure.
     """
-    empty_per_pr: list[dict[str, Any]] = []
     if skip_taxonomy:
-        return dict(_EMPTY_RESULT), empty_per_pr
+        return []
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
@@ -450,7 +195,7 @@ def run_taxonomy_for_accepted_prs(
 
     if not prs:
         logger.info("No accepted PRs to run taxonomy on.")
-        return dict(_EMPTY_RESULT), empty_per_pr
+        return []
 
     items: list[dict[str, Any]] = []
     meta_nums: list[Any] = []
@@ -496,11 +241,9 @@ def run_taxonomy_for_accepted_prs(
         logger.warning(
             "Taxonomy batch classification failed for %s/%s: %s", owner, repo, e
         )
-        return dict(_EMPTY_RESULT), empty_per_pr
+        return []
 
     per_pr_out: list[dict[str, Any]] = []
-    good_rows: list[dict[str, Any]] = []
-    good_nums: list[Any] = []
 
     for num, iid, item, res in zip(
         meta_nums,
@@ -519,16 +262,9 @@ def run_taxonomy_for_accepted_prs(
             logger.warning("Taxonomy error for PR #%s: %s", num, res["error"])
         else:
             entry.update(_serialise_result(res))
-            good_rows.append(res)
-            good_nums.append(num)
         per_pr_out.append(entry)
 
-    if not good_rows:
-        logger.warning("All per-PR taxonomy calls failed for %s/%s", owner, repo)
-        return dict(_EMPTY_RESULT), per_pr_out
-
-    merged = aggregate_pr_taxonomy(good_rows, good_nums)
-    return _serialise_result(merged), per_pr_out
+    return per_pr_out
 
 
 def run_taxonomy_classification(
@@ -542,11 +278,10 @@ def run_taxonomy_classification(
 ) -> dict[str, Any]:
     """Run taxonomy classification on a repository (legacy: README + git log, not PR-based).
 
-    Returns a dict with the 16 taxonomy column values.
-    On error or skip, returns empty strings for all columns.
+    Returns a serialised classifier result dict, or empty dict on error or skip.
     """
     if skip_taxonomy:
-        return dict(_EMPTY_RESULT)
+        return {}
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
@@ -586,7 +321,7 @@ def run_taxonomy_classification(
                 repo,
                 result["error"],
             )
-            return dict(_EMPTY_RESULT)
+            return {}
 
         return _serialise_result(result)
 
@@ -594,4 +329,4 @@ def run_taxonomy_classification(
         logger.warning(
             "Taxonomy classification exception for %s/%s: %s", owner, repo, e
         )
-        return dict(_EMPTY_RESULT)
+        return {}

@@ -1,7 +1,7 @@
 import os
 import re
 from datetime import timezone
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 # GitHub API headers
 HEADERS = {"Accept": "application/vnd.github.v3+json"}
@@ -378,11 +378,6 @@ def is_test_file_standalone(language_config: Dict, filename: str) -> bool:
     name_no_ext_orig = os.path.splitext(base)[0]
 
     # Get patterns from config (always has common_test_patterns due to merge)
-    file_analysis = language_config.get("file_analysis", {})
-    specific_patterns = file_analysis.get("test_patterns", [])
-    common_patterns = file_analysis.get("common_test_patterns", _COMMON_TEST_PATTERNS)
-    all_patterns = specific_patterns + common_patterns
-
     # Check language-specific patterns
     # for pattern in all_patterns:
     #     try:
@@ -601,7 +596,7 @@ def has_sufficient_code_changes(
             stats.get("source_code_deleted", 0)
         )
         return source_code_changes >= int(min_code_changes), source_code_changes
-    except Exception as e:
+    except Exception:
         return False, 0
 
 
@@ -721,7 +716,6 @@ def extract_issue_number_from_pr_body(
     if len(unique_issues) == 1:
         return unique_issues.pop(), None
     elif len(unique_issues) > 1:
-        pr_context = f" for PR #{pr_number}" if pr_number else ""
         sorted_issues = sorted(unique_issues)
         rejection_reason = f"Multiple issues found in PR body: {', '.join(['#' + issue for issue in sorted_issues])}"
         return None, rejection_reason
@@ -782,7 +776,7 @@ def fetch_issue_details_rest(
         if e.response.status_code == 404:
             pass  # Issue not found, return None
         return None
-    except Exception as e:
+    except Exception:
         return None
 
 

@@ -25,24 +25,15 @@ LLM deep analysis (--skip-llm to disable):
   LLM validates all 10 scores, fills gaps static checks miss, adds [LLM] evidence.
 
 Grades: CLEAN (<=10) | MINOR (<=18) | MODERATE (<=28) | CRITICAL (>28)
-
-Usage:
-    python tools/production_quality_check.py \\
-        --owner Khaleddnfr \\
-        --repos "core,eventify,..." \\
-        [--skip-llm] [--model gpt-4o]
 """
 
-import csv
 import hashlib
-import io
 import json
 import os
 import re
 import shutil
 import subprocess
-import sys
-from collections import Counter, defaultdict
+from collections import defaultdict
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -432,8 +423,6 @@ def _c1_error_handling(root: str, files: list[str], lang: str) -> tuple[int, lis
 
         if lang == "python":
             bare_count += len(pat["python"]["bare_except"].findall(content))
-            broad_hits = pat["python"]["broad_except"].findall(content)
-            broad_count = len(broad_hits)
             # broad except without re-raise
             blocks = re.findall(
                 r"except\s+Exception[^:]*:(.*?)(?=\n\s*(?:except|def|class)\b|\Z)",
@@ -454,7 +443,7 @@ def _c1_error_handling(root: str, files: list[str], lang: str) -> tuple[int, lis
             r"try\s*:(.*?)(?=\n\s*except\b|\n\s*finally\b)", content, re.DOTALL
         )
         for block in try_blocks:
-            if len([l for l in block.split("\n") if l.strip()]) > 15:
+            if len([ln for ln in block.split("\n") if ln.strip()]) > 15:
                 large_try += 1
 
         if pat["common"]["retry"].search(content):
@@ -847,7 +836,7 @@ def _c6_resource_management(
     score = 1
     evidence = []
     no_cleanup = http_no_timeout = bare_open = 0
-    has_cleanup = has_timeout = False
+    has_timeout = False
     pat = PATTERNS_RESOURCE
 
     for f in files:
@@ -865,8 +854,6 @@ def _c6_resource_management(
         )
 
         if lang == "python":
-            if pat["python"]["cleanup"].search(content):
-                has_cleanup = True
             if pat["python"]["timeout"].search(content):
                 has_timeout = True
             if has_resource and not pat["python"]["cleanup"].search(content):
@@ -891,8 +878,6 @@ def _c6_resource_management(
                     bare_open += 1
 
         else:  # js
-            if pat["js"]["cleanup"].search(content):
-                has_cleanup = True
             if pat["js"]["timeout"].search(content):
                 has_timeout = True
             if has_resource and not pat["js"]["cleanup"].search(content):
@@ -982,7 +967,6 @@ def _c7_architecture(root: str, files: list[str], lang: str) -> tuple[int, list[
         lines = content.split("\n")
         line_count = len(lines)
         rel = _rel(f, root)
-        ext = os.path.splitext(f)[1]
 
         if line_count > 500:
             god_files.append((rel, line_count))
@@ -1036,13 +1020,13 @@ def _c7_architecture(root: str, files: list[str], lang: str) -> tuple[int, list[
 
     if god_files:
         god_files.sort(key=lambda x: -x[1])
-        ex = ", ".join(f"{n} ({l}L)" for n, l in god_files[:3])
+        ex = ", ".join(f"{n} ({ln}L)" for n, ln in god_files[:3])
         evidence.append(f"{len(god_files)} files exceed 500 lines: {ex}")
         score = max(score, 4 if len(god_files) > 5 else 2)
 
     if long_funcs:
         long_funcs.sort(key=lambda x: -x[2])
-        ex = ", ".join(f"`{n}()` {l}L" for _, n, l in long_funcs[:3])
+        ex = ", ".join(f"`{n}()` {ln}L" for _, n, ln in long_funcs[:3])
         evidence.append(f"{len(long_funcs)} functions exceed 50 lines: {ex}")
         score = max(score, 3)
 
@@ -1247,9 +1231,9 @@ def _c9_cicd(root: str) -> tuple[int, list[str]]:
     build_dirs = {"dist", "build", "out", ".next"}
     gitignore = _read(os.path.join(root, ".gitignore"))
     ignored = {
-        l.strip().rstrip("/")
-        for l in gitignore.splitlines()
-        if l.strip() and not l.strip().startswith("#")
+        ln.strip().rstrip("/")
+        for ln in gitignore.splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
     }
     not_ignored = [
         d
@@ -1332,17 +1316,17 @@ def _c10_tech_debt(root: str, files: list[str], lang: str) -> tuple[int, list[st
         lines = content.split("\n")
         window = 10
         for i in range(len(lines) - window + 1):
-            block_lines = [l.strip() for l in lines[i : i + window]]
-            non_empty = [l for l in block_lines if l]
+            block_lines = [ln.strip() for ln in lines[i : i + window]]
+            non_empty = [ln for ln in block_lines if ln]
             if len(non_empty) < 7:
                 continue
             boilerplate = sum(
                 1
-                for l in block_lines
+                for ln in block_lines
                 if (
-                    not l
-                    or l.startswith(("import ", "from ", "//", "#", "/*", "*", "@"))
-                    or re.match(r"^[)\]}{;,]*$", l)
+                    not ln
+                    or ln.startswith(("import ", "from ", "//", "#", "/*", "*", "@"))
+                    or re.match(r"^[)\]}{;,]*$", ln)
                 )
             )
             if boilerplate > window * 0.5:
@@ -1455,7 +1439,7 @@ def _smart_sample(
             continue
         lines = content.split("\n")
         # Take up to 80 lines per file
-        sample = "\n".join(f"{i + 1}: {l}" for i, l in enumerate(lines[:80]))
+        sample = "\n".join(f"{i + 1}: {ln}" for i, ln in enumerate(lines[:80]))
         chunk = f"\n--- {_rel(f, root)} ---\n{sample}\n"
         if total_chars + len(chunk) > char_budget:
             break
@@ -1538,6 +1522,7 @@ Rules:
 """
 
     from llm_client import call_llm
+
     try:
         raw = call_llm(
             [

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """
-
 Analyzes repositories for quality and suitability by combining:
 - Repository-level metrics (file structure, test coverage, CI/CD, etc.)
 - PR-level analysis with detailed rejection tracking
@@ -41,105 +40,49 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-try:
-    from .constants import (
-        AI_MARKER_PATTERNS,
-        DATA_FILE_EXTENSIONS,
-        FEATURE_LABEL_NEGATIVE,
-        FEATURE_LABEL_POSITIVE,
-        FEATURE_NEGATIVE_PATTERNS,
-        FEATURE_POSITIVE_PATTERNS,
-        GENERIC_COMMIT_PATTERNS,
-        MAX_CHANGED_FILES,
-        MAX_FEATURE_CHANGED_FILES,
-        MAX_NON_TEST_FILES,
-        MAX_TEST_FILES,
-        MIN_FEATURE_NET_ADDITIONS,
-        MIN_FEATURE_SOURCE_FILES,
-        MIN_PR_CODE_CHANGES,
-        MIN_TEST_FILES,
-        OPEN_SOURCE_HINT_FILES,
-        OPEN_SOURCE_KEYWORDS,
-        REPO_HEALTH_DESCRIPTIONS,
-        REPO_HEALTH_THRESHOLDS,
-    )
-    from .repo_evaluator_helpers import (
-        MAX_ISSUE_WORDS,
-        MIN_ISSUE_WORDS,
-        count_words,
-        get_language_config,
-        has_rust_embedded_tests,
-        has_sufficient_code_changes,
-        has_valid_issue_word_count,
-        is_asset_file_path,
-        is_english,
-        is_test_file_path,
-        load_language_config,
-        normalize_to_utc,
-    )
-except Exception:
-    from constants import (
-        AI_MARKER_PATTERNS,
-        DATA_FILE_EXTENSIONS,
-        FEATURE_LABEL_NEGATIVE,
-        FEATURE_LABEL_POSITIVE,
-        FEATURE_NEGATIVE_PATTERNS,
-        FEATURE_POSITIVE_PATTERNS,
-        GENERIC_COMMIT_PATTERNS,
-        MAX_CHANGED_FILES,
-        MAX_FEATURE_CHANGED_FILES,
-        MAX_NON_TEST_FILES,
-        MAX_TEST_FILES,
-        MIN_FEATURE_NET_ADDITIONS,
-        MIN_FEATURE_SOURCE_FILES,
-        MIN_PR_CODE_CHANGES,
-        MIN_TEST_FILES,
-        OPEN_SOURCE_HINT_FILES,
-        OPEN_SOURCE_KEYWORDS,
-        REPO_HEALTH_DESCRIPTIONS,
-        REPO_HEALTH_THRESHOLDS,
-    )
-    from repo_evaluator_helpers import (
-        MAX_ISSUE_WORDS,
-        MIN_ISSUE_WORDS,
-        count_words,
-        get_language_config,
-        has_rust_embedded_tests,
-        has_sufficient_code_changes,
-        has_valid_issue_word_count,
-        is_asset_file_path,
-        is_english,
-        is_test_file_path,
-        load_language_config,
-        normalize_to_utc,
-    )
-
-try:
-    from .platform_clients import (
-        BitbucketClient,
-        GitHubClient,
-        GitLabClient,
-        PlatformClient,
-        detect_platform,
-    )
-except Exception:
-    from platform_clients import (
-        BitbucketClient,
-        GitHubClient,
-        GitLabClient,
-        PlatformClient,
-        detect_platform,
-    )
-
-try:
-    from .quality_checks import run_all_quality_checks
-except Exception:
-    from quality_checks import run_all_quality_checks
-
-try:
-    from .taxonomy_check import TAXONOMY_COLUMNS, run_taxonomy_for_accepted_prs
-except Exception:
-    from taxonomy_check import TAXONOMY_COLUMNS, run_taxonomy_for_accepted_prs
+from constants import (
+    AI_MARKER_PATTERNS,
+    DATA_FILE_EXTENSIONS,
+    FEATURE_LABEL_NEGATIVE,
+    FEATURE_LABEL_POSITIVE,
+    FEATURE_NEGATIVE_PATTERNS,
+    FEATURE_POSITIVE_PATTERNS,
+    GENERIC_COMMIT_PATTERNS,
+    MAX_CHANGED_FILES,
+    MAX_FEATURE_CHANGED_FILES,
+    MAX_NON_TEST_FILES,
+    MAX_TEST_FILES,
+    MIN_FEATURE_NET_ADDITIONS,
+    MIN_FEATURE_SOURCE_FILES,
+    MIN_PR_CODE_CHANGES,
+    MIN_TEST_FILES,
+    OPEN_SOURCE_HINT_FILES,
+    OPEN_SOURCE_KEYWORDS,
+    REPO_HEALTH_THRESHOLDS,
+)
+from platform_clients import (
+    BitbucketClient,
+    GitHubClient,
+    GitLabClient,
+    PlatformClient,
+    detect_platform,
+)
+from quality_checks import run_all_quality_checks
+from repo_evaluator_helpers import (
+    MAX_ISSUE_WORDS,
+    MIN_ISSUE_WORDS,
+    count_words,
+    get_language_config,
+    has_rust_embedded_tests,
+    has_sufficient_code_changes,
+    has_valid_issue_word_count,
+    is_asset_file_path,
+    is_english,
+    is_test_file_path,
+    load_language_config,
+    normalize_to_utc,
+)
+from taxonomy_check import run_taxonomy_for_accepted_prs
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -437,7 +380,7 @@ def classify_feature_pr(pr_data: dict, language_config: dict) -> dict:
     """Classify a PR as a feature PR using heuristic signals."""
     title = pr_data.get("title", "")
     labels = [
-        l.get("name", "").lower() for l in pr_data.get("labels", {}).get("nodes", [])
+        ln.get("name", "").lower() for ln in pr_data.get("labels", {}).get("nodes", [])
     ]
     files = pr_data.get("files", {}).get("nodes", [])
 
@@ -2236,13 +2179,12 @@ class PRAnalyzer:
                     # Check for rate limit errors
                     if "rate limit" in error_msg.lower() or "403" in error_msg:
                         logger.error(
-                            f"API rate limit exceeded. Please provide a token using --token"
+                            "API rate limit exceeded. Please provide a token using --token"
                         )
                     logger.error(f"API error: {error_msg}")
                     break
 
                 repo_data = res.get("data", {}).get("repository", {})
-                search_data = res.get("data", {}).get("search", {})
                 pr_data = repo_data.get("pullRequests", {})
                 language_name = repo_data.get("primaryLanguage", {}).get("name", None)
                 pr_nodes = pr_data.get("nodes", [])
@@ -2560,7 +2502,7 @@ class PRAnalyzer:
                 # Check for rate limit errors
                 if "rate limit" in error_str.lower() or "403" in error_str:
                     logger.error(
-                        f"API rate limit exceeded. Please provide a token using --token"
+                        "API rate limit exceeded. Please provide a token using --token"
                     )
                     logger.error(f"Error: {e}")
                 elif (
@@ -3058,7 +3000,7 @@ class RepoEvaluator:
 def print_report(report: AnalysisReport):
     """Print human-readable report to console."""
     print(f"\n{'=' * 60}")
-    print(f"REPOSITORY EVALUATION REPORT")
+    print("REPOSITORY EVALUATION REPORT")
     print(f"{'=' * 60}")
     print(f"Repository: {report.repo_full_name}")
     print(f"Language: {report.repo_metrics.primary_language}")
@@ -3152,7 +3094,7 @@ def print_report(report: AnalysisReport):
     #         # else:
     #         #     print(f"  - {label}: {check.get('value')}")
 
-    print(f"\n--- PR Analysis ---")
+    print("\n--- PR Analysis ---")
     print(f"Total PRs Analyzed: {report.pr_analysis.total_prs}")
     print(f"Passed First Filters PRs: {len(report.pr_analysis.accepted_prs)}")
     for pr in report.pr_analysis.accepted_prs:
@@ -3171,7 +3113,7 @@ def print_report(report: AnalysisReport):
     )
 
     if report.pr_analysis.f2p_results:
-        print(f"\n--- F2P Analysis Results ---")
+        print("\n--- F2P Analysis Results ---")
         valid_f2p_count = sum(
             1 for r in report.pr_analysis.f2p_results if r.get("verdict") == "VALID"
         )
@@ -3189,11 +3131,11 @@ def print_report(report: AnalysisReport):
         print(f"Total F2P tests found: {total_f2p_tests}")
         print(f"Total P2P tests found: {total_p2p_tests}")
     elif report.pr_analysis.f2p_skipped_reason:
-        print(f"\n--- F2P Analysis ---")
+        print("\n--- F2P Analysis ---")
         print(f"⚠️  Skipped: {report.pr_analysis.f2p_skipped_reason}")
 
     if report.pr_analysis.feature_accepted_prs:
-        print(f"\n--- Feature PRs ---")
+        print("\n--- Feature PRs ---")
         print(f"Feature PRs: {report.pr_analysis.feature_accepted}")
         # for pr in report.pr_analysis.feature_accepted_prs:
         #     signals = ', '.join(pr.get('feature_signals', []))
@@ -3431,7 +3373,7 @@ def clone_repo(
     if result.returncode != 0:
         raise RuntimeError(f"Failed to clone repository: {result.stderr}")
 
-    logger.info(f"Successfully cloned repository")
+    logger.info("Successfully cloned repository")
     return clone_path
 
 
@@ -3723,7 +3665,7 @@ def main():
                     pr_number=pr.get("number"),
                 )
 
-            taxonomy_results, pr_taxonomy = run_taxonomy_for_accepted_prs(
+            pr_taxonomy = run_taxonomy_for_accepted_prs(
                 accepted_prs=report.pr_analysis.accepted_prs,
                 owner=owner,
                 repo=repo_name,
@@ -3734,11 +3676,8 @@ def main():
                 pr_number=args.pr_number,
                 concurrency=args.taxonomy_concurrency,
             )
-            report_json.update(taxonomy_results)
             if pr_taxonomy:
                 report_json["pr_taxonomy"] = pr_taxonomy
-        else:
-            report_json.update({col: "" for col in TAXONOMY_COLUMNS})
 
         # Output
         if args.json:

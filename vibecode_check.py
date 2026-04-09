@@ -1,12 +1,8 @@
-import csv
-import io
 import json
 import os
 import re
 import shutil
 import subprocess
-import sys
-import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -1075,7 +1071,7 @@ def _smart_sample_vibe(
         tag = " [FLAGGED]" if flagged else ""
         chunk = (
             f"\n--- {_rel(f, root)}{tag} ---\n"
-            + "\n".join(f"{i + 1}: {l}" for i, l in enumerate(lines))
+            + "\n".join(f"{i + 1}: {line}" for i, line in enumerate(lines))
             + "\n"
         )
         if total_chars + len(chunk) > char_budget:
@@ -1233,6 +1229,7 @@ Return this exact JSON:
 }}"""
 
     from llm_client import call_llm
+
     try:
         raw = call_llm(
             [

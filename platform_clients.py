@@ -7,10 +7,7 @@ from typing import Callable, Dict, List, Optional
 
 import requests
 
-try:
-    from .repo_evaluator_helpers import HEADERS
-except Exception:
-    from repo_evaluator_helpers import HEADERS
+from repo_evaluator_helpers import HEADERS
 
 
 logger = logging.getLogger(__name__)
