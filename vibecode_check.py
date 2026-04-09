@@ -1232,28 +1232,27 @@ Return this exact JSON:
   "summary": "2-3 sentence overall assessment"
 }}"""
 
-    for attempt in range(3):
-        try:
-            resp = client.chat.completions.create(
-                model=model,
-                temperature=0,
-                messages=[
-                    {"role": "system", "content": _LLM_SYSTEM},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            raw = resp.choices[0].message.content.strip()
-            raw = re.sub(r"```(?:json)?", "", raw).strip()
-            start, end = raw.find("{"), raw.rfind("}") + 1
-            if start >= 0 and end > start:
-                raw = raw[start:end]
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            if attempt == 2:
-                return {"error": "JSON parse failed", "verdict": "", "confidence": 0}
-        except Exception as exc:
-            return {"error": str(exc), "verdict": "", "confidence": 0}
-    return {}
+    from llm_client import call_llm
+    try:
+        raw = call_llm(
+            [
+                {"role": "system", "content": _LLM_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            model=model,
+            client=client,
+            temperature=0,
+        )
+        raw = raw.strip()
+        raw = re.sub(r"```(?:json)?", "", raw).strip()
+        start, end = raw.find("{"), raw.rfind("}") + 1
+        if start >= 0 and end > start:
+            raw = raw[start:end]
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        return {"error": "JSON parse failed", "verdict": "", "confidence": 0}
+    except Exception as exc:
+        return {"error": str(exc), "verdict": "", "confidence": 0}
 
 
 # ---------------------------------------------------------------------------

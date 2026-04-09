@@ -1,17 +1,13 @@
 import json
 import logging
 import os
-import random
 import re
-import time
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, RateLimitError
+from openai import OpenAI
 
-_RETRYABLE = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
-_MAX_RETRIES = 8
-_BASE_DELAY = 1.0
+from llm_client import call_llm
 
 logger = logging.getLogger(__name__)
 
@@ -445,6 +441,7 @@ class QualityEvaluator:
             or os.environ.get("OPENAI_QUALITY_MODEL", "").strip()
             or DEFAULT_OPENAI_MODEL
         )
+        self.client = OpenAI(api_key=self.api_key)
         self.last_rejection_reason = None
 
     def _get_api_key(self) -> str:
@@ -701,35 +698,18 @@ class QualityEvaluator:
         return self._call_openai(prompt)
 
     def _call_openai(self, prompt: str) -> Optional[str]:
-        client = OpenAI(api_key=self.api_key)
-        last_err: Exception | None = None
-        for attempt in range(_MAX_RETRIES):
-            try:
-                response = client.chat.completions.create(
-                    model=self.openai_model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "You are a code review assistant. Respond only with valid JSON.",
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0,
-                )
-                return response.choices[0].message.content
-            except _RETRYABLE as e:
-                last_err = e
-                delay = _BASE_DELAY * (2 ** attempt) + random.uniform(0, 1)
-                logger.warning(
-                    f"OpenAI call failed (attempt {attempt + 1}/{_MAX_RETRIES}): "
-                    f"{type(e).__name__} — retrying in {delay:.1f}s"
-                )
-                time.sleep(delay)
-            except Exception as e:
-                logger.error(f"OpenAI API failed: {e}")
-                return None
-        logger.error(f"OpenAI API failed after {_MAX_RETRIES} retries: {last_err}")
-        return None
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a code review assistant. Respond only with valid JSON.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+        try:
+            return call_llm(messages, model=self.openai_model, client=self.client, temperature=0)
+        except Exception as e:
+            logger.error(f"OpenAI API failed: {e}")
+            return None
 
     def _parse_json_response(self, response: str) -> Optional[dict]:
         if not response:
