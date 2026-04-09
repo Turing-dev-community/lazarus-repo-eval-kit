@@ -98,6 +98,115 @@ def _safe_div(n: float, d: float) -> float:
     return float(n) / float(d) if d else 0.0
 
 
+def _is_rubric_accepted(rubric_scores: dict) -> bool:
+    """A PR passes the rubric gate if it has <=1 score of 3 and <=2 scores of 2."""
+    scores = [
+        block.get("score")
+        for block in rubric_scores.values()
+        if isinstance(block, dict) and block.get("score") is not None
+    ]
+    return (
+        sum(1 for s in scores if int(s) == 3) <= 1
+        and sum(1 for s in scores if int(s) == 2) <= 2
+    )
+
+
+def _count_rubric_accepted(pr_rubrics: Optional[List[dict]]) -> int:
+    if not pr_rubrics:
+        return 0
+    return sum(1 for r in pr_rubrics if r.get("rubric_accepted", False))
+
+
+def _merge_rejection_breakdown(a: dict, b: dict) -> dict:
+    merged: Dict[str, int] = {}
+    for d in (a, b):
+        for key, val in d.items():
+            count = val["count"] if isinstance(val, dict) else int(val)
+            merged[key] = merged.get(key, 0) + count
+    total = sum(merged.values())
+    return {
+        k: {"count": v, "percentage": round(v / total * 100, 1) if total > 0 else 0.0}
+        for k, v in merged.items()
+    }
+
+
+def _merge_pr_stats(
+    cumulative: Optional["PRRejectionStats"],
+    batch: "PRRejectionStats",
+) -> "PRRejectionStats":
+    if cumulative is None:
+        return batch
+
+    merged_accepted = cumulative.accepted_prs + batch.accepted_prs
+    total = cumulative.total_prs + batch.total_prs
+    rejected = cumulative.rejected + batch.rejected
+
+    avg_loc = _safe_div(
+        cumulative.avg_loc_per_pr * cumulative.total_prs
+        + batch.avg_loc_per_pr * batch.total_prs,
+        total,
+    )
+    issue_ratio = _safe_div(
+        cumulative.issue_linked_pr_ratio * cumulative.total_prs
+        + batch.issue_linked_pr_ratio * batch.total_prs,
+        total,
+    )
+
+    def _min_date(a: Optional[str], b: Optional[str]) -> Optional[str]:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return min(a, b)
+
+    def _max_date(a: Optional[str], b: Optional[str]) -> Optional[str]:
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return max(a, b)
+
+    first = _min_date(cumulative.pr_first_date, batch.pr_first_date)
+    last = _max_date(cumulative.pr_last_date, batch.pr_last_date)
+
+    if first and last:
+        from datetime import date as _date
+
+        spread = (_date.fromisoformat(last) - _date.fromisoformat(first)).days
+    else:
+        spread = 0
+
+    return PRRejectionStats(
+        accepted_prs=merged_accepted,
+        total_prs=total,
+        accepted=len(merged_accepted),
+        rejected=rejected,
+        acceptance_rate=round(_safe_div(len(merged_accepted), total), 3),
+        rejection_breakdown=_merge_rejection_breakdown(
+            cumulative.rejection_breakdown, batch.rejection_breakdown
+        ),
+        f2p_results=(cumulative.f2p_results or []) + (batch.f2p_results or []),
+        f2p_skipped_reason=cumulative.f2p_skipped_reason or batch.f2p_skipped_reason,
+        feature_accepted_prs=(cumulative.feature_accepted_prs or [])
+        + (batch.feature_accepted_prs or []),
+        feature_accepted=cumulative.feature_accepted + batch.feature_accepted,
+        feature_rejection_breakdown=_merge_rejection_breakdown(
+            cumulative.feature_rejection_breakdown or {},
+            batch.feature_rejection_breakdown or {},
+        ),
+        avg_loc_per_pr=round(avg_loc, 2),
+        issue_linked_pr_ratio=round(issue_ratio, 3),
+        pr_rubrics=(cumulative.pr_rubrics or []) + (batch.pr_rubrics or []),
+        pr_first_date=first,
+        pr_last_date=last,
+        pr_spread_days=spread,
+        pr_unique_dates_count=(cumulative.pr_unique_dates_count or 0)
+        + (batch.pr_unique_dates_count or 0),
+        next_cursor=batch.next_cursor,
+        has_more_pages=batch.has_more_pages,
+    )
+
+
 def _make_check(value, *, min_val=None, max_val=None, range_min=None, range_max=None):
     if range_min is not None and range_max is not None:
         passed = value >= range_min and value <= range_max
@@ -566,6 +675,8 @@ class PRRejectionStats:
     pr_last_date: Optional[str] = None
     pr_spread_days: Optional[int] = None
     pr_unique_dates_count: Optional[int] = None
+    next_cursor: Optional[str] = None
+    has_more_pages: bool = False
 
 
 @dataclass
@@ -2149,11 +2260,18 @@ class PRAnalyzer:
             logger.warning("API patch retrieval failed: %s", e)
             return None
 
-    def analyze_prs(self, max_prs: Optional[int] = None) -> PRRejectionStats:
+    def analyze_prs(
+        self,
+        max_prs: Optional[int] = None,
+        start_cursor: Optional[str] = None,
+        batch_limit: Optional[int] = None,
+    ) -> PRRejectionStats:
         """Analyze PRs and track rejections."""
         logger.info(f"Analyzing PRs for {self.repo_full_name}...")
 
-        cursor = None
+        cursor = start_cursor
+        _next_cursor: Optional[str] = None
+        _has_more_pages: bool = False
         total_prs = 0
         accepted = 0
         rejected = 0
@@ -2194,7 +2312,9 @@ class PRAnalyzer:
                     break
 
                 for pr_data in pr_nodes:
-                    if max_prs and total_prs >= max_prs:
+                    if (max_prs and total_prs >= max_prs) or (
+                        batch_limit and total_prs >= batch_limit
+                    ):
                         break
 
                     logger.info(f"Processing PR #{pr_data['number']}...")
@@ -2490,12 +2610,20 @@ class PRAnalyzer:
                             feature_rejection_reasons.get(reason, 0) + 1
                         )
 
-                if max_prs and total_prs >= max_prs:
+                if (max_prs and total_prs >= max_prs) or (
+                    batch_limit and total_prs >= batch_limit
+                ):
+                    # Stopped mid-page or at page boundary due to limit — more pages may exist
+                    _next_cursor = cursor
+                    _has_more_pages = True
                     break
 
                 if not page_info.get("hasNextPage"):
+                    _has_more_pages = False
                     break
                 cursor = page_info.get("endCursor")
+                _next_cursor = cursor
+                _has_more_pages = True
 
             except Exception as e:
                 error_str = str(e)
@@ -2569,6 +2697,8 @@ class PRAnalyzer:
             pr_last_date=pr_last_date,
             pr_spread_days=pr_spread_days,
             pr_unique_dates_count=pr_unique_dates_count,
+            next_cursor=_next_cursor,
+            has_more_pages=_has_more_pages,
         )
 
 
@@ -2645,21 +2775,110 @@ class RepoEvaluator:
             start_date=self.start_date,
         )
 
+        from constants import MAX_ACCEPTED_PRS, INITIAL_BATCH_MULTIPLIER
+        import math as _math
+
+        cumulative_stats: Optional[PRRejectionStats] = None
+        cursor: Optional[str] = None
+        multiplier: float = INITIAL_BATCH_MULTIPLIER
+        total_raw_scanned: int = 0
+
         try:
-            pr_analysis = pr_analyzer.analyze_prs(max_prs=self.max_prs)
-            if pr_analysis.total_prs == 0:
-                logger.warning("No PRs were analyzed. This could be due to:")
-                logger.warning(
-                    "Rate limit exceeded (provide --token)"
-                ) if not self.platform_client.token else None
-                logger.warning("No merged PRs found in the repository")
-                logger.warning("API access issues")
+            while True:
+                # Determine how many more goal-accepted PRs we still need.
+                # Use rubric-accepted count as the signal; fall back to F2P-accepted
+                # when rubrics are skipped.
+                if cumulative_stats is None:
+                    already_goal_accepted = 0
+                elif not self.skip_pr_rubrics:
+                    already_goal_accepted = _count_rubric_accepted(
+                        cumulative_stats.pr_rubrics
+                    )
+                else:
+                    already_goal_accepted = cumulative_stats.accepted
+
+                remaining_needed = MAX_ACCEPTED_PRS - already_goal_accepted
+                if remaining_needed <= 0:
+                    logger.info(
+                        f"Reached target of {MAX_ACCEPTED_PRS} accepted PRs — stopping early."
+                    )
+                    break
+
+                batch_limit = _math.ceil(remaining_needed * multiplier)
+
+                # Respect --max-prs as a hard cap on total raw PRs across all batches
+                if self.max_prs is not None:
+                    remaining_raw_budget = self.max_prs - total_raw_scanned
+                    if remaining_raw_budget <= 0:
+                        break
+                    batch_limit = min(batch_limit, remaining_raw_budget)
+
+                logger.info(
+                    f"Adaptive batch: remaining_needed={remaining_needed}, "
+                    f"multiplier={multiplier:.2f}, batch_limit={batch_limit}"
+                )
+
+                batch_stats = pr_analyzer.analyze_prs(
+                    start_cursor=cursor,
+                    batch_limit=batch_limit,
+                )
+                total_raw_scanned += batch_stats.total_prs
+
+                # Preserve cursor state — pipeline methods construct a fresh
+                # PRRejectionStats and lose these fields
+                batch_cursor = batch_stats.next_cursor
+                batch_has_more = batch_stats.has_more_pages
+
+                if not self.skip_f2p and batch_stats.accepted_prs:
+                    batch_stats = self._run_f2p_analysis(batch_stats, primary_language)
+                batch_stats = self._run_pr_rubrics(batch_stats, language_config)
+
+                # Restore pagination state
+                batch_stats.next_cursor = batch_cursor
+                batch_stats.has_more_pages = batch_has_more
+
+                cumulative_stats = _merge_pr_stats(cumulative_stats, batch_stats)
+                cursor = batch_cursor
+
+                # Adjust multiplier from observed post-pipeline acceptance rate
+                if batch_stats.total_prs > 0:
+                    if not self.skip_pr_rubrics:
+                        batch_goal_accepted = _count_rubric_accepted(
+                            batch_stats.pr_rubrics
+                        )
+                    else:
+                        batch_goal_accepted = batch_stats.accepted
+                    observed_rate = batch_goal_accepted / batch_stats.total_prs
+                    if observed_rate > 0:
+                        multiplier = max(2.0, _math.ceil(1.0 / observed_rate) + 1)
+                    else:
+                        multiplier = min(multiplier * 2, 20.0)
+
+                if not batch_has_more:
+                    break
+                if (
+                    already_goal_accepted
+                    + _count_rubric_accepted(batch_stats.pr_rubrics or [])
+                    >= MAX_ACCEPTED_PRS
+                ):
+                    logger.info(
+                        f"Reached target of {MAX_ACCEPTED_PRS} accepted PRs — stopping early."
+                    )
+                    break
+
         except Exception as e:
             logger.error(f"Error analyzing PRs: {e}")
             import traceback
 
             logger.debug(traceback.format_exc())
-            pr_analysis = PRRejectionStats(
+
+        if cumulative_stats is None:
+            logger.warning("No PRs were analyzed. This could be due to:")
+            if not self.platform_client.token:
+                logger.warning("Rate limit exceeded (provide --token)")
+            logger.warning("No merged PRs found in the repository")
+            logger.warning("API access issues")
+            cumulative_stats = PRRejectionStats(
                 total_prs=0,
                 accepted=0,
                 rejected=0,
@@ -2668,11 +2887,14 @@ class RepoEvaluator:
                 accepted_prs=[],
                 pr_rubrics=[],
             )
+        elif cumulative_stats.total_prs == 0:
+            logger.warning("No PRs were analyzed. This could be due to:")
+            if not self.platform_client.token:
+                logger.warning("Rate limit exceeded (provide --token)")
+            logger.warning("No merged PRs found in the repository")
+            logger.warning("API access issues")
 
-        if not self.skip_f2p and pr_analysis.accepted_prs:
-            pr_analysis = self._run_f2p_analysis(pr_analysis, primary_language)
-
-        pr_analysis = self._run_pr_rubrics(pr_analysis, language_config)
+        pr_analysis = cumulative_stats
 
         # Repo health checks
         files = repo_analyzer._get_all_files()
@@ -2989,7 +3211,9 @@ class RepoEvaluator:
                 results.append(entry)
                 continue
 
-            entry["rubrics"] = scores.to_trimmed_rubrics_dict()
+            trimmed = scores.to_trimmed_rubrics_dict()
+            entry["rubrics"] = trimmed
+            entry["rubric_accepted"] = _is_rubric_accepted(trimmed)
             results.append(entry)
 
         pr_analysis.pr_rubrics = results
@@ -3111,6 +3335,14 @@ def print_report(report: AnalysisReport):
     print(
         f"Failed First Filters: {report.pr_analysis.rejected} ({(1 - report.pr_analysis.acceptance_rate) * 100:.1f}%)"
     )
+    if report.pr_analysis.pr_rubrics:
+        rubric_passed = _count_rubric_accepted(report.pr_analysis.pr_rubrics)
+        total = report.pr_analysis.total_prs
+        print(
+            f"Passed Rubrics (& First Filters): {rubric_passed} ({rubric_passed / total * 100:.1f}%)"
+            if total > 0
+            else "Passed Rubrics (& First Filters): 0"
+        )
 
     if report.pr_analysis.f2p_results:
         print("\n--- F2P Analysis Results ---")
