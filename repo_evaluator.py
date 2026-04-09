@@ -200,8 +200,12 @@ def _merge_pr_stats(
         pr_first_date=first,
         pr_last_date=last,
         pr_spread_days=spread,
-        pr_unique_dates_count=(cumulative.pr_unique_dates_count or 0)
-        + (batch.pr_unique_dates_count or 0),
+        pr_unique_dates=list(
+            set(cumulative.pr_unique_dates or []) | set(batch.pr_unique_dates or [])
+        ),
+        pr_unique_dates_count=len(
+            set(cumulative.pr_unique_dates or []) | set(batch.pr_unique_dates or [])
+        ),
         next_cursor=batch.next_cursor,
         has_more_pages=batch.has_more_pages,
     )
@@ -675,6 +679,7 @@ class PRRejectionStats:
     pr_last_date: Optional[str] = None
     pr_spread_days: Optional[int] = None
     pr_unique_dates_count: Optional[int] = None
+    pr_unique_dates: Optional[List[str]] = None  # raw set for cross-batch deduplication
     next_cursor: Optional[str] = None
     has_more_pages: bool = False
 
@@ -2673,10 +2678,12 @@ class PRAnalyzer:
             pr_first_date = _first.date().isoformat()
             pr_last_date = _last.date().isoformat()
             pr_spread_days = (_last - _first).days
-            pr_unique_dates_count = len({d.date() for d in pr_created_datetimes})
+            pr_unique_dates_set = {d.date().isoformat() for d in pr_created_datetimes}
+            pr_unique_dates_count = len(pr_unique_dates_set)
         else:
             pr_first_date = pr_last_date = None
             pr_spread_days = pr_unique_dates_count = 0
+            pr_unique_dates_set = set()
 
         return PRRejectionStats(
             total_prs=total_prs,
@@ -2694,6 +2701,7 @@ class PRAnalyzer:
             pr_last_date=pr_last_date,
             pr_spread_days=pr_spread_days,
             pr_unique_dates_count=pr_unique_dates_count,
+            pr_unique_dates=list(pr_unique_dates_set),
             next_cursor=_next_cursor,
             has_more_pages=_has_more_pages,
         )
@@ -3129,6 +3137,7 @@ class RepoEvaluator:
             pr_last_date=pr_analysis.pr_last_date,
             pr_spread_days=pr_analysis.pr_spread_days,
             pr_unique_dates_count=pr_analysis.pr_unique_dates_count,
+            pr_unique_dates=pr_analysis.pr_unique_dates,
         )
 
     def _run_pr_rubrics(
