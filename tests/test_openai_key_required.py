@@ -51,7 +51,7 @@ def test_main_exits_when_key_missing():
 def test_main_message_includes_setup_hint():
     result = _run_main()
     assert ".env" in result.stderr
-    assert "platform.openai.com" in result.stderr
+    assert "openai.com/api-keys" in result.stderr
 
 
 def test_main_exits_with_skip_quality_llm_only():
