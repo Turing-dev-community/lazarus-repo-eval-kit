@@ -3584,8 +3584,8 @@ def main():
     parser.add_argument(
         "--taxonomy-concurrency",
         type=int,
-        default=int(os.environ.get("TAXONOMY_CONCURRENCY", "8")),
-        help="Max parallel taxonomy LLM calls per repo (default: 8 or TAXONOMY_CONCURRENCY env)",
+        default=int(os.environ.get("LLM_CONCURRENCY", "4")),
+        help="Max parallel taxonomy LLM calls per repo (default: 4 or LLM_CONCURRENCY env)",
     )
 
     args = parser.parse_args()

@@ -1,4 +1,5 @@
 import logging
+import os
 import random
 import time
 
@@ -11,8 +12,8 @@ from openai import (
 )
 
 RETRYABLE_ERRORS = (RateLimitError, APITimeoutError, APIConnectionError, InternalServerError)
-MAX_RETRIES = 8
-BASE_DELAY = 1.0
+MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "8"))
+BASE_DELAY = float(os.environ.get("LLM_BACKOFF_BASE_DELAY", "5.0"))
 
 logger = logging.getLogger(__name__)
 

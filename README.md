@@ -57,6 +57,23 @@ An OpenAI API key is required to run the script. Without it, the script will exi
 
 The cost for one repository run is typically $1–$5 based on past experience; very large repositories may cost more.
 
+### Optional LLM tuning
+
+These variables can be added to your `.env` file to control how the tool talks to OpenAI:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `LLM_CONCURRENCY` | `4` | How many LLM calls to make at the same time. Higher = faster, but more likely to hit rate limits. Lower = safer. |
+| `LLM_MAX_RETRIES` | `8` | How many times a failed LLM call is retried before giving up. |
+| `LLM_BACKOFF_BASE_DELAY` | `5.0` | How many seconds to wait before the first retry. The wait doubles each time: 5 s → 10 s → 20 s → … Raise this if you keep hitting rate limit errors. |
+
+Example:
+```
+LLM_CONCURRENCY=2
+LLM_MAX_RETRIES=10
+LLM_BACKOFF_BASE_DELAY=5.0
+```
+
 
 ### Basic Usage
 
