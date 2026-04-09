@@ -40,7 +40,7 @@ quality_evaluator._RETRYABLE = (
 
 
 def _make_evaluator() -> QualityEvaluator:
-    return QualityEvaluator(llm_provider="openai", api_key="test-key")
+    return QualityEvaluator(api_key="test-key")
 
 
 def _make_openai_response(content: str) -> MagicMock:

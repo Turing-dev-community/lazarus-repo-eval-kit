@@ -432,14 +432,12 @@ DEFAULT_OPENAI_MODEL = "gpt-5.1"
 class QualityEvaluator:
     def __init__(
         self,
-        llm_provider: str = "openai",
         api_key: Optional[str] = None,
         quality_threshold: int = 1,
         max_diff_lines: int = 1000,
         openai_model: Optional[str] = None,
     ):
-        self.llm_provider = llm_provider.lower()
-        self.api_key = api_key or self._get_api_key()
+        self.api_key = api_key if api_key is not None else self._get_api_key()
         self.quality_threshold = quality_threshold
         self.max_diff_lines = max_diff_lines
         self.openai_model = (
@@ -450,11 +448,7 @@ class QualityEvaluator:
         self.last_rejection_reason = None
 
     def _get_api_key(self) -> str:
-        if self.llm_provider == "gemini":
-            return os.environ.get("GEMINI_API_KEY", "")
-        elif self.llm_provider == "openai":
-            return os.environ.get("OPENAI_API_KEY", "")
-        return ""
+        return os.environ.get("OPENAI_API_KEY", "")
 
     def check_f2p_p2p(
         self, src_diff: str, test_diff: str
@@ -702,39 +696,9 @@ class QualityEvaluator:
     def _call_llm(self, prompt: str) -> Optional[str]:
         if not self.api_key:
             raise ValueError(
-                f"No API key configured for {self.llm_provider}. "
-                "Set OPENAI_API_KEY (or GEMINI_API_KEY) in your environment."
+                "No API key configured. Set OPENAI_API_KEY in your environment."
             )
-        try:
-            if self.llm_provider == "gemini":
-                return self._call_gemini(prompt)
-            elif self.llm_provider == "openai":
-                return self._call_openai(prompt)
-            logger.error(f"Unknown LLM provider: {self.llm_provider}")
-            return None
-        except Exception as e:
-            logger.error(f"LLM API call failed: {e}")
-            return None
-
-    def _call_gemini(self, prompt: str) -> Optional[str]:
-        import requests
-
-        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent"
-        try:
-            response = requests.post(
-                f"{url}?key={self.api_key}",
-                headers={"Content-Type": "application/json"},
-                json={"contents": [{"role": "user", "parts": [{"text": prompt}]}]},
-                timeout=120,
-            )
-            response.raise_for_status()
-            return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Gemini API failed: {e}")
-            return None
-        except (KeyError, IndexError) as e:
-            logger.error(f"Unexpected Gemini response: {e}")
-            return None
+        return self._call_openai(prompt)
 
     def _call_openai(self, prompt: str) -> Optional[str]:
         client = OpenAI(api_key=self.api_key)
