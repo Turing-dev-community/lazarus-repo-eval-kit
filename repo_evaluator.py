@@ -2312,9 +2312,7 @@ class PRAnalyzer:
                     break
 
                 for pr_data in pr_nodes:
-                    if (max_prs and total_prs >= max_prs) or (
-                        batch_limit and total_prs >= batch_limit
-                    ):
+                    if max_prs and total_prs >= max_prs:
                         break
 
                     logger.info(f"Processing PR #{pr_data['number']}...")
@@ -2613,9 +2611,8 @@ class PRAnalyzer:
                 if (max_prs and total_prs >= max_prs) or (
                     batch_limit and total_prs >= batch_limit
                 ):
-                    # Stopped mid-page or at page boundary due to limit — more pages may exist
-                    _next_cursor = cursor
-                    _has_more_pages = True
+                    _next_cursor = page_info.get("endCursor")
+                    _has_more_pages = page_info.get("hasNextPage", False)
                     break
 
                 if not page_info.get("hasNextPage"):
@@ -2856,11 +2853,15 @@ class RepoEvaluator:
 
                 if not batch_has_more:
                     break
-                if (
-                    already_goal_accepted
-                    + _count_rubric_accepted(batch_stats.pr_rubrics or [])
-                    >= MAX_ACCEPTED_PRS
-                ):
+
+                # Re-derive goal count from the now-merged cumulative stats
+                if not self.skip_pr_rubrics:
+                    cumulative_goal_accepted = _count_rubric_accepted(
+                        cumulative_stats.pr_rubrics
+                    )
+                else:
+                    cumulative_goal_accepted = cumulative_stats.accepted
+                if cumulative_goal_accepted >= MAX_ACCEPTED_PRS:
                     logger.info(
                         f"Reached target of {MAX_ACCEPTED_PRS} accepted PRs — stopping early."
                     )
