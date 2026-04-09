@@ -10,7 +10,6 @@ import tempfile
 from collections import defaultdict
 from pathlib import Path
 
-import click
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
@@ -548,7 +547,10 @@ def _scan_sensitive_logging(root: str, files: list[str]) -> tuple[int, list[str]
         if len(affected) == 1:
             details.append(f"SENSITIVE_LOG ({desc}) in {affected[0]}")
         else:
-            details.append(f"SENSITIVE_LOG ({desc}) in {len(affected)} files: {', '.join(affected[:5])}" + (" ..." if len(affected) > 5 else ""))
+            details.append(
+                f"SENSITIVE_LOG ({desc}) in {len(affected)} files: {', '.join(affected[:5])}"
+                + (" ..." if len(affected) > 5 else "")
+            )
     return count, details
 
 
@@ -649,7 +651,10 @@ def _scan_injections(root: str, files: list[str]) -> tuple[int, list[str]]:
         if len(affected) == 1:
             details.append(f"INJECTION ({desc}) in {affected[0]}")
         else:
-            details.append(f"INJECTION ({desc}) in {len(affected)} files: {', '.join(affected[:5])}" + (" ..." if len(affected) > 5 else ""))
+            details.append(
+                f"INJECTION ({desc}) in {len(affected)} files: {', '.join(affected[:5])}"
+                + (" ..." if len(affected) > 5 else "")
+            )
     return count, details
 
 
@@ -676,7 +681,10 @@ def _scan_debug(root: str, files: list[str]) -> tuple[int, list[str]]:
         if len(affected) == 1:
             details.append(f"DEBUG_EXPOSURE ({desc}) in {affected[0]}")
         else:
-            details.append(f"DEBUG_EXPOSURE ({desc}) in {len(affected)} files: {', '.join(affected[:5])}" + (" ..." if len(affected) > 5 else ""))
+            details.append(
+                f"DEBUG_EXPOSURE ({desc}) in {len(affected)} files: {', '.join(affected[:5])}"
+                + (" ..." if len(affected) > 5 else "")
+            )
     return count, details
 
 
@@ -713,7 +721,10 @@ def _scan_crypto(root: str, files: list[str]) -> tuple[int, list[str]]:
         if len(affected) == 1:
             details.append(f"CRYPTO ({desc}) in {affected[0]}")
         else:
-            details.append(f"CRYPTO ({desc}) in {len(affected)} files: {', '.join(affected[:5])}" + (" ..." if len(affected) > 5 else ""))
+            details.append(
+                f"CRYPTO ({desc}) in {len(affected)} files: {', '.join(affected[:5])}"
+                + (" ..." if len(affected) > 5 else "")
+            )
     return count, details
 
 

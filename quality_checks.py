@@ -24,8 +24,9 @@ def _get_openai_client():
     """Create an OpenAI client from the OPENAI_API_KEY env var (loaded via .env)."""
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        logger.warning("No OPENAI_API_KEY found — LLM analysis will be skipped")
-        return None
+        raise ValueError(
+            "OPENAI_API_KEY is not set. Set it in your .env file or environment."
+        )
     try:
         from openai import OpenAI
 

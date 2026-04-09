@@ -45,7 +45,6 @@ import sys
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import click
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
@@ -1146,13 +1145,19 @@ def _c8_testing(
     ratio = len(test_files) / max(len(source_files), 1)
 
     if ratio < 0.1 and len(source_files) > 10:
-        evidence.append(f"{len(test_files)} test files / {len(source_files)} source files (ratio: {ratio:.2f})")
+        evidence.append(
+            f"{len(test_files)} test files / {len(source_files)} source files (ratio: {ratio:.2f})"
+        )
         score = max(score, 4)
     elif ratio < 0.3:
-        evidence.append(f"{len(test_files)} test files / {len(source_files)} source files (ratio: {ratio:.2f})")
+        evidence.append(
+            f"{len(test_files)} test files / {len(source_files)} source files (ratio: {ratio:.2f})"
+        )
         score = max(score, 3)
     elif ratio < 0.5:
-        evidence.append(f"{len(test_files)} test files / {len(source_files)} source files (ratio: {ratio:.2f})")
+        evidence.append(
+            f"{len(test_files)} test files / {len(source_files)} source files (ratio: {ratio:.2f})"
+        )
         score = max(score, 2)
 
     failure_re = re.compile(

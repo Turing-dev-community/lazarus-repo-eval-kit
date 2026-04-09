@@ -10,7 +10,6 @@ import tempfile
 from collections import Counter, defaultdict
 from pathlib import Path
 
-import click
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
