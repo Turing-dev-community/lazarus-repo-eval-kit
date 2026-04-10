@@ -103,10 +103,6 @@ class TaxonomyClassifier:
 
     Parameters
     ----------
-    api_key : str | None
-        API key.  Falls back to ``$OPENAI_API_KEY``.
-    base_url : str
-        OpenAI-compatible base URL (default: OpenAI).
     model : str
         Model name to use for classification.
     taxonomy_path : str | Path | None
@@ -117,8 +113,6 @@ class TaxonomyClassifier:
 
     def __init__(
         self,
-        api_key: str | None = None,
-        base_url: str = "https://api.openai.com/v1",
         model: str = "gpt-5.1",
         taxonomy_path: str | Path | None = None,
         concurrency: int = 32,

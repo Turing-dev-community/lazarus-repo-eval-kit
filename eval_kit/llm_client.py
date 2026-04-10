@@ -22,30 +22,40 @@ BASE_DELAY = float(os.environ.get("LLM_BACKOFF_BASE_DELAY", "5.0"))
 
 logger = logging.getLogger(__name__)
 
+_client: OpenAI | None = None
 
-def _get_openai_client():
-    """Create an OpenAI client from the OPENAI_API_KEY env var (loaded via .env)."""
+
+def _get_openai_client() -> OpenAI:
+    """Get or create a cached OpenAI client from env vars."""
+    global _client
+    if _client is not None:
+        return _client
+
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         raise ValueError(
             "OPENAI_API_KEY is not set. Set it in your .env file or environment."
         )
-    try:
-        from openai import OpenAI
 
-        return OpenAI(api_key=api_key)
-    except ImportError:
-        logger.warning("openai package not installed — LLM analysis will be skipped")
-        return None
+    kwargs = {"api_key": api_key}
+    base_url = os.getenv("OPENAI_BASE_URL")
+    if base_url:
+        kwargs["base_url"] = base_url
+
+    _client = OpenAI(**kwargs)
+    return _client
+
+
+def clear_llm_client():
+    """Clear the cached LLM client."""
+    global _client
+    _client = None
 
 
 def call_llm(
     messages: list[dict],
     *,
     model: str,
-    client: OpenAI | None = None,
-    api_key: str | None = None,
-    base_url: str = "https://api.openai.com/v1",
     temperature: float = 0,
     max_retries: int = MAX_RETRIES,
     base_delay: float = BASE_DELAY,
@@ -53,14 +63,16 @@ def call_llm(
 ) -> str | object:
     """Call an OpenAI-compatible LLM with exponential-backoff retry logic.
 
+    The client is created from OPENAI_API_KEY and optionally OPENAI_BASE_URL
+    env vars via _get_openai_client().
+
     Set response_format to a Pydantic model to use structured output
     (beta.chat.completions.parse); omit for plain string content.
 
     Raises on exhausted retries or non-retryable errors — callers are
     responsible for their own fallback/sentinel values.
     """
-    if client is None:
-        client = OpenAI(api_key=api_key) if api_key else _get_openai_client()
+    client = _get_openai_client()
 
     last_err: Exception | None = None
     for attempt in range(max_retries):

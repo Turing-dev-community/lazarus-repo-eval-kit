@@ -3763,12 +3763,7 @@ def main():
         default=os.environ.get("TAXONOMY_MODEL", "gpt-5.1"),
         help="Model for taxonomy classification (default: gpt-5.1 or TAXONOMY_MODEL env)",
     )
-    parser.add_argument(
-        "--taxonomy-base-url",
-        type=str,
-        default=os.environ.get("TAXONOMY_BASE_URL", "https://api.openai.com/v1"),
-        help="Base URL for taxonomy LLM API (default: OpenAI or TAXONOMY_BASE_URL env)",
-    )
+
     parser.add_argument(
         "--taxonomy-concurrency",
         type=int,
@@ -3918,7 +3913,6 @@ def main():
                 primary_language=report.repo_metrics.primary_language or "",
                 get_patch=_taxonomy_patch,
                 model=args.taxonomy_model,
-                base_url=args.taxonomy_base_url,
                 pr_number=args.pr_number,
                 concurrency=args.taxonomy_concurrency,
             )

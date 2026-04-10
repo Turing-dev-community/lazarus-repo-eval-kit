@@ -105,26 +105,6 @@ python repo_evaluator.py bitbucket:owner/repo --token $BITBUCKET_TOKEN --platfor
 python repo_evaluator.py owner/repo --repo-path /path/to/local/repo --token $GITHUB_TOKEN
 ```
 
-
-## Quality Checks
-
-The evaluator can run three additional quality checks on repositories:
-
-1. **Vibecode Check** — Detects signs of AI-generated "vibe coding" in commit history
-2. **Security Check** — Looks for common security issues and anti-patterns
-3. **Production Quality Check** — Assesses overall code quality and maintainability
-
-Each check produces two outputs: a **critical** summary and detailed **signals**.
-
-### Running Quality Checks
-
-By default, quality checks run automatically with LLM analysis (requires `OPENAI_API_KEY` — see Environment Setup above):
-
-```bash
-python repo_evaluator.py owner/repo --token $GITHUB_TOKEN --json
-```
-
-
 ## JavaScript/TypeScript test execution (Jest) configuration
 
 By default, the evaluator tries to run Jest in a **structured JSON mode** for the most accurate

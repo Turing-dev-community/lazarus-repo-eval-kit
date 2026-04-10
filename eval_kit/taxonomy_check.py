@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 from pathlib import Path
 from typing import Any, Callable
@@ -163,7 +162,6 @@ def run_taxonomy_for_accepted_prs(
     get_patch: Callable[[dict[str, Any]], str | None],
     *,
     model: str = "gpt-5.1",
-    base_url: str = "https://api.openai.com/v1",
     skip_taxonomy: bool = False,
     pr_number: int | None = None,
     concurrency: int = 8,
@@ -176,12 +174,6 @@ def run_taxonomy_for_accepted_prs(
     """
     if skip_taxonomy:
         return []
-
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError(
-            "OPENAI_API_KEY is not set. Set it in your .env file or environment."
-        )
 
     prs: list[dict[str, Any]] = []
     for p in accepted_prs:
@@ -228,8 +220,6 @@ def run_taxonomy_for_accepted_prs(
 
     try:
         classifier = TaxonomyClassifier(
-            api_key=api_key,
-            base_url=base_url,
             model=model,
             concurrency=max(1, int(concurrency)),
         )
@@ -270,7 +260,6 @@ def run_taxonomy_classification(
     repo_path: str | Path,
     primary_language: str = "",
     model: str = "gpt-5.1",
-    base_url: str = "https://api.openai.com/v1",
     skip_taxonomy: bool = False,
 ) -> dict[str, Any]:
     """Run taxonomy classification on a repository (legacy: README + git log, not PR-based).
@@ -279,12 +268,6 @@ def run_taxonomy_classification(
     """
     if skip_taxonomy:
         return {}
-
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        raise ValueError(
-            "OPENAI_API_KEY is not set. Set it in your .env file or environment."
-        )
 
     query = _build_repo_query(owner, repo, repo_path, primary_language)
     git_log = _get_recent_git_log(repo_path)
@@ -298,8 +281,6 @@ def run_taxonomy_classification(
 
     try:
         classifier = TaxonomyClassifier(
-            api_key=api_key,
-            base_url=base_url,
             model=model,
             concurrency=1,
         )

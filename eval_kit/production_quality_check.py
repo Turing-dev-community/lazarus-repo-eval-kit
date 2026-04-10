@@ -1474,7 +1474,7 @@ _LLM_CRITERIA_DESC = {
 
 
 def _llm_analysis(
-    code_samples: str, criteria_results: dict, client, model: str, lang: str
+    code_samples: str, criteria_results: dict, model: str, lang: str
 ) -> dict:
     """Single LLM call per repo. Returns refined scores and new findings per criterion."""
 
@@ -1525,7 +1525,6 @@ Rules:
                 {"role": "user", "content": prompt},
             ],
             model=model,
-            client=client,
             temperature=0,
         )
         raw = raw.strip()
@@ -1611,7 +1610,6 @@ def _check_repo(
     token: str,
     clone_base: str,
     verbose_log=None,
-    client=None,
     model: str = DEFAULT_MODEL,
     skip_llm: bool = False,
     existing_repo_path: str | None = None,
@@ -1706,12 +1704,12 @@ def _check_repo(
     }
 
     # LLM — single call per repo, all 10 criteria
-    if not skip_llm and client:
+    if not skip_llm:
         if verbose_log:
             verbose_log(f"    Running LLM analysis for {repo} (lang={lang}) ...")
         code_samples = _smart_sample(root, source_files, result["criteria"])
         if code_samples:
-            llm = _llm_analysis(code_samples, result["criteria"], client, model, lang)
+            llm = _llm_analysis(code_samples, result["criteria"], model, lang)
             result["llm_analysis"] = llm
             if "_error" not in llm:
                 for crit_name in CRITERIA_KEYS:

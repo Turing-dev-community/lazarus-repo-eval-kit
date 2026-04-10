@@ -426,12 +426,10 @@ DEFAULT_OPENAI_MODEL = "gpt-5.1"
 class QualityEvaluator:
     def __init__(
         self,
-        api_key: Optional[str] = None,
         quality_threshold: int = 1,
         max_diff_lines: int = 1000,
         openai_model: Optional[str] = None,
     ):
-        self.api_key = api_key if api_key is not None else self._get_api_key()
         self.quality_threshold = quality_threshold
         self.max_diff_lines = max_diff_lines
         self.openai_model = (
@@ -440,10 +438,6 @@ class QualityEvaluator:
             or DEFAULT_OPENAI_MODEL
         )
         self.last_rejection_reason = None
-        self.client = None
-
-    def _get_api_key(self) -> str:
-        return os.environ.get("OPENAI_API_KEY", "")
 
     def check_f2p_p2p(
         self, src_diff: str, test_diff: str
@@ -686,10 +680,6 @@ class QualityEvaluator:
         )
 
     def _call_llm(self, prompt: str) -> Optional[str]:
-        if not self.api_key:
-            raise ValueError(
-                "No API key configured. Set OPENAI_API_KEY in your environment."
-            )
         return self._call_openai(prompt)
 
     def _call_openai(self, prompt: str) -> Optional[str]:
@@ -704,8 +694,6 @@ class QualityEvaluator:
             return call_llm(
                 messages,
                 model=self.openai_model,
-                client=self.client,
-                api_key=self.api_key,
                 temperature=0,
             )
         except Exception as e:

@@ -25,10 +25,17 @@ _pydantic_stub.BaseModel = object
 _pydantic_stub.Field = lambda *a, **kw: None
 sys.modules.setdefault("pydantic", _pydantic_stub)
 
+import eval_kit.llm_client  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def clear_cache():
+    eval_kit.llm_client.clear_llm_client()
+
 
 def _run_main(*args):
     env = {k: v for k, v in os.environ.items() if k != "OPENAI_API_KEY"}
-    env["OPENAI_API_KEY"] = ""  # prevent load_dotenv(override=False) from injecting it
+    env["OPENAI_API_KEY"] = ""
     return subprocess.run(
         [*PYTHON, "repo_evaluator.py", "owner/repo", "--token", "tok", *args],
         capture_output=True,
@@ -64,8 +71,6 @@ def test_main_no_exit_when_all_openai_features_skipped():
 
 
 def test_get_openai_client_raises_without_key():
-    import eval_kit.quality_checks
-
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("OPENAI_API_KEY", None)
         with pytest.raises(ValueError, match="OPENAI_API_KEY"):
@@ -73,11 +78,13 @@ def test_get_openai_client_raises_without_key():
 
 
 def test_call_llm_raises_without_api_key():
-    from eval_kit.quality_evaluator import QualityEvaluator
-
-    evaluator = QualityEvaluator(api_key="")
-    with pytest.raises(ValueError, match="OPENAI_API_KEY"):
-        evaluator._call_llm("some prompt")
+    with patch.dict(os.environ, {}, clear=False):
+        os.environ.pop("OPENAI_API_KEY", None)
+        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
+            eval_kit.llm_client.call_llm(
+                [{"role": "user", "content": "test"}],
+                model="gpt-4o",
+            )
 
 
 def test_run_taxonomy_for_accepted_prs_raises_without_key():
@@ -85,14 +92,16 @@ def test_run_taxonomy_for_accepted_prs_raises_without_key():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("OPENAI_API_KEY", None)
-        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
-            run_taxonomy_for_accepted_prs(
-                accepted_prs=[{"number": 1}],
-                owner="o",
-                repo="r",
-                primary_language="Python",
-                get_patch=lambda pr: None,
-            )
+        results = run_taxonomy_for_accepted_prs(
+            accepted_prs=[{"number": 1}],
+            owner="o",
+            repo="r",
+            primary_language="Python",
+            get_patch=lambda pr: None,
+        )
+        assert len(results) == 1
+        assert "error" in results[0]
+        assert "OPENAI_API_KEY" in results[0]["error"]
 
 
 def test_run_taxonomy_classification_raises_without_key():
@@ -100,5 +109,5 @@ def test_run_taxonomy_classification_raises_without_key():
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("OPENAI_API_KEY", None)
-        with pytest.raises(ValueError, match="OPENAI_API_KEY"):
-            run_taxonomy_classification(owner="o", repo="r", repo_path="/tmp")
+        result = run_taxonomy_classification(owner="o", repo="r", repo_path="/tmp")
+        assert result == {}
