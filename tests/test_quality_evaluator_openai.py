@@ -11,14 +11,18 @@ import pytest
 class _RateLimitError(Exception):
     pass
 
+
 class _APITimeoutError(Exception):
     pass
+
 
 class _APIConnectionError(Exception):
     pass
 
+
 class _InternalServerError(Exception):
     pass
+
 
 _openai_stub = types.ModuleType("openai")
 _openai_stub.RateLimitError = _RateLimitError
@@ -28,11 +32,11 @@ _openai_stub.InternalServerError = _InternalServerError
 _openai_stub.OpenAI = MagicMock()
 sys.modules.setdefault("openai", _openai_stub)
 
-import llm_client  # noqa: E402
-from quality_evaluator import QualityEvaluator  # noqa: E402
-from llm_client import MAX_RETRIES as _MAX_RETRIES  # noqa: E402
+import eval_kit.llm_client  # noqa: E402
+from eval_kit.llm_client import MAX_RETRIES as _MAX_RETRIES  # noqa: E402
+from eval_kit.quality_evaluator import QualityEvaluator  # noqa: E402
 
-llm_client.RETRYABLE_ERRORS = (
+eval_kit.llm_client.RETRYABLE_ERRORS = (
     _RateLimitError,
     _APITimeoutError,
     _APIConnectionError,
@@ -53,9 +57,11 @@ def evaluator():
     return ev
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_success_on_first_attempt(mock_sleep, evaluator):
-    evaluator.client.chat.completions.create.return_value = _make_openai_response('{"ok": true}')
+    evaluator.client.chat.completions.create.return_value = _make_openai_response(
+        '{"ok": true}'
+    )
 
     result = evaluator._call_openai("prompt")
 
@@ -67,9 +73,14 @@ def test_success_on_first_attempt(mock_sleep, evaluator):
 @pytest.mark.parametrize(
     "error_cls",
     [_RateLimitError, _APITimeoutError, _APIConnectionError, _InternalServerError],
-    ids=["RateLimitError", "APITimeoutError", "APIConnectionError", "InternalServerError"],
+    ids=[
+        "RateLimitError",
+        "APITimeoutError",
+        "APIConnectionError",
+        "InternalServerError",
+    ],
 )
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_retries_on_transient_error_then_succeeds(mock_sleep, error_cls, evaluator):
     evaluator.client.chat.completions.create.side_effect = [
         error_cls(),
@@ -84,7 +95,7 @@ def test_retries_on_transient_error_then_succeeds(mock_sleep, error_cls, evaluat
     assert mock_sleep.call_count == 2
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_exhausts_all_retries_and_returns_none(mock_sleep, evaluator):
     evaluator.client.chat.completions.create.side_effect = _RateLimitError()
 
@@ -95,19 +106,21 @@ def test_exhausts_all_retries_and_returns_none(mock_sleep, evaluator):
     assert mock_sleep.call_count == _MAX_RETRIES
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_logs_warning_on_each_retry(mock_sleep, evaluator, caplog):
     evaluator.client.chat.completions.create.side_effect = _RateLimitError()
 
     with caplog.at_level(logging.WARNING, logger="llm_client"):
         evaluator._call_openai("prompt")
 
-    warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+    warning_messages = [
+        r.message for r in caplog.records if r.levelno == logging.WARNING
+    ]
     assert len(warning_messages) == _MAX_RETRIES
     assert all("retrying" in m for m in warning_messages)
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_logs_error_after_all_retries_exhausted(mock_sleep, evaluator, caplog):
     evaluator.client.chat.completions.create.side_effect = _RateLimitError()
 
@@ -118,7 +131,7 @@ def test_logs_error_after_all_retries_exhausted(mock_sleep, evaluator, caplog):
     assert any("after" in m and "retries" in m for m in error_messages)
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_exponential_backoff_increases(mock_sleep, evaluator):
     evaluator.client.chat.completions.create.side_effect = _RateLimitError()
 
@@ -130,7 +143,7 @@ def test_exponential_backoff_increases(mock_sleep, evaluator):
     assert sleep_durations[-1] > sleep_durations[0]
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_returns_none_immediately_on_non_retryable_error(mock_sleep, evaluator):
     evaluator.client.chat.completions.create.side_effect = ValueError("unexpected")
 
@@ -141,7 +154,7 @@ def test_returns_none_immediately_on_non_retryable_error(mock_sleep, evaluator):
     mock_sleep.assert_not_called()
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_logs_error_on_non_retryable_error(mock_sleep, evaluator, caplog):
     evaluator.client.chat.completions.create.side_effect = ValueError("unexpected")
 
@@ -151,7 +164,7 @@ def test_logs_error_on_non_retryable_error(mock_sleep, evaluator, caplog):
     assert any("LLM call failed" in r.message for r in caplog.records)
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_uses_configured_model(mock_sleep, evaluator):
     evaluator.client.chat.completions.create.return_value = _make_openai_response("{}")
 
@@ -161,7 +174,7 @@ def test_uses_configured_model(mock_sleep, evaluator):
     assert call_kwargs["model"] == evaluator.openai_model
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_temperature_is_zero(mock_sleep, evaluator):
     evaluator.client.chat.completions.create.return_value = _make_openai_response("{}")
 
@@ -171,7 +184,7 @@ def test_temperature_is_zero(mock_sleep, evaluator):
     assert call_kwargs["temperature"] == 0
 
 
-@patch("llm_client.time.sleep")
+@patch("eval_kit.llm_client.time.sleep")
 def test_prompt_is_passed_as_user_message(mock_sleep, evaluator):
     evaluator.client.chat.completions.create.return_value = _make_openai_response("{}")
 

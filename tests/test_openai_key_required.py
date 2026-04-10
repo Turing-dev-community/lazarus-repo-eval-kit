@@ -64,16 +64,16 @@ def test_main_no_exit_when_all_openai_features_skipped():
 
 
 def test_get_openai_client_raises_without_key():
-    import quality_checks
+    import eval_kit.quality_checks
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("OPENAI_API_KEY", None)
         with pytest.raises(ValueError, match="OPENAI_API_KEY"):
-            quality_checks._get_openai_client()
+            eval_kit.llm_client._get_openai_client()
 
 
 def test_call_llm_raises_without_api_key():
-    from quality_evaluator import QualityEvaluator
+    from eval_kit.quality_evaluator import QualityEvaluator
 
     evaluator = QualityEvaluator(api_key="")
     with pytest.raises(ValueError, match="OPENAI_API_KEY"):
@@ -81,7 +81,7 @@ def test_call_llm_raises_without_api_key():
 
 
 def test_run_taxonomy_for_accepted_prs_raises_without_key():
-    from taxonomy_check import run_taxonomy_for_accepted_prs
+    from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("OPENAI_API_KEY", None)
@@ -96,7 +96,7 @@ def test_run_taxonomy_for_accepted_prs_raises_without_key():
 
 
 def test_run_taxonomy_classification_raises_without_key():
-    from taxonomy_check import run_taxonomy_classification
+    from eval_kit.taxonomy_check import run_taxonomy_classification
 
     with patch.dict(os.environ, {}, clear=False):
         os.environ.pop("OPENAI_API_KEY", None)

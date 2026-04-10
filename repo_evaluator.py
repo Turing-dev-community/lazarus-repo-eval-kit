@@ -29,18 +29,24 @@ import argparse
 import csv
 import json
 import logging
+import math as _math
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import traceback
+import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
+from datetime import date as _date
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from constants import (
+from dotenv import load_dotenv
+
+from eval_kit.constants import (
     AI_MARKER_PATTERNS,
     DATA_FILE_EXTENSIONS,
     FEATURE_LABEL_NEGATIVE,
@@ -48,6 +54,8 @@ from constants import (
     FEATURE_NEGATIVE_PATTERNS,
     FEATURE_POSITIVE_PATTERNS,
     GENERIC_COMMIT_PATTERNS,
+    INITIAL_BATCH_MULTIPLIER,
+    MAX_ACCEPTED_PRS,
     MAX_CHANGED_FILES,
     MAX_FEATURE_CHANGED_FILES,
     MAX_NON_TEST_FILES,
@@ -60,18 +68,20 @@ from constants import (
     OPEN_SOURCE_KEYWORDS,
     REPO_HEALTH_THRESHOLDS,
 )
-from platform_clients import (
+from eval_kit.platform_clients import (
     BitbucketClient,
     GitHubClient,
     GitLabClient,
     PlatformClient,
     detect_platform,
 )
-from quality_checks import run_all_quality_checks
-from repo_evaluator_helpers import (
+from eval_kit.quality_checks import run_all_quality_checks
+from eval_kit.quality_evaluator import QualityEvaluator, split_patch_by_test_files
+from eval_kit.repo_evaluator_helpers import (
     MAX_ISSUE_WORDS,
     MIN_ISSUE_WORDS,
     count_words,
+    get_full_patch_content,
     get_language_config,
     has_rust_embedded_tests,
     has_sufficient_code_changes,
@@ -82,7 +92,11 @@ from repo_evaluator_helpers import (
     load_language_config,
     normalize_to_utc,
 )
-from taxonomy_check import run_taxonomy_for_accepted_prs
+from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
+from eval_kit.test_runners import F2PP2PAnalyzer, get_runner, preflight_check
+
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
+
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -170,8 +184,6 @@ def _merge_pr_stats(
     last = _max_date(cumulative.pr_last_date, batch.pr_last_date)
 
     if first and last:
-        from datetime import date as _date
-
         spread = (_date.fromisoformat(last) - _date.fromisoformat(first)).days
     else:
         spread = 0
@@ -1385,8 +1397,6 @@ class RepoAnalyzer:
     def _parse_coverage_xml(self, xml_path: Path) -> Optional[float]:
         """Parse Cobertura XML coverage report."""
         try:
-            import xml.etree.ElementTree as ET
-
             tree = ET.parse(xml_path)
             root = tree.getroot()
 
@@ -2240,8 +2250,6 @@ class PRAnalyzer:
             f" #{pr_number}" if pr_number else "",
         )
         try:
-            from repo_evaluator_helpers import get_full_patch_content
-
             patch = get_full_patch_content(
                 self.repo_full_name,
                 base_sha,
@@ -2782,9 +2790,6 @@ class RepoEvaluator:
             start_date=self.start_date,
         )
 
-        from constants import MAX_ACCEPTED_PRS, INITIAL_BATCH_MULTIPLIER
-        import math as _math
-
         cumulative_stats: Optional[PRRejectionStats] = None
         cursor: Optional[str] = None
         multiplier: float = INITIAL_BATCH_MULTIPLIER
@@ -2879,7 +2884,6 @@ class RepoEvaluator:
 
         except Exception as e:
             logger.error(f"Error analyzing PRs: {e}")
-            import traceback
 
             logger.debug(traceback.format_exc())
 
@@ -3032,7 +3036,6 @@ class RepoEvaluator:
     def _run_f2p_analysis(
         self, pr_analysis: PRRejectionStats, primary_language: str
     ) -> PRRejectionStats:
-        from test_runners import F2PP2PAnalyzer, get_runner, preflight_check
 
         check = preflight_check(self.repo_path, primary_language)
         if not check["can_run"]:
@@ -3147,12 +3150,6 @@ class RepoEvaluator:
     ) -> PRRejectionStats:
         """LLM rubrics on accepted_prs only (trimmed six dimensions)."""
         if self.skip_pr_rubrics:
-            pr_analysis.pr_rubrics = []
-            return pr_analysis
-        try:
-            from quality_evaluator import QualityEvaluator, split_patch_by_test_files
-        except ImportError:
-            logger.warning("quality_evaluator module not found; skipping PR rubrics")
             pr_analysis.pr_rubrics = []
             return pr_analysis
 
@@ -3763,8 +3760,8 @@ def main():
     parser.add_argument(
         "--taxonomy-model",
         type=str,
-        default=os.environ.get("TAXONOMY_MODEL", "gpt-4o"),
-        help="Model for taxonomy classification (default: gpt-4o or TAXONOMY_MODEL env)",
+        default=os.environ.get("TAXONOMY_MODEL", "gpt-5.1"),
+        help="Model for taxonomy classification (default: gpt-5.1 or TAXONOMY_MODEL env)",
     )
     parser.add_argument(
         "--taxonomy-base-url",
@@ -3963,7 +3960,6 @@ def main():
 
     except Exception as e:
         logger.error(f"Error evaluating repository: {e}")
-        import traceback
 
         traceback.print_exc()
         sys.exit(1)

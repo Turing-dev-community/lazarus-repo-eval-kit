@@ -1,19 +1,18 @@
 """Tests for 504 Gateway Timeout page-size reduction in fetch_prs."""
 
 import logging
+from unittest.mock import Mock, patch
 
 import pytest
 import requests
-from unittest.mock import Mock, patch
 
-from platform_clients import (
-    GitHubClient,
-    BitbucketClient,
-    GitLabClient,
-    MIN_PAGE_SIZE,
+from eval_kit.platform_clients import (
     MAX_RETRIES,
+    MIN_PAGE_SIZE,
+    BitbucketClient,
+    GitHubClient,
+    GitLabClient,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -100,8 +99,8 @@ def gitlab_client():
 # ── GitHub tests ─────────────────────────────────────────────────────────────
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.post")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.post")
 def test_github_fetch_prs_halves_page_size_on_504(mock_post, mock_sleep, github_client):
     """504 at page_size=50 → halves to 25 → succeeds."""
     call_log = []
@@ -130,8 +129,8 @@ def test_github_fetch_prs_halves_page_size_on_504(mock_post, mock_sleep, github_
     )
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.post")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.post")
 def test_github_fetch_prs_raises_at_min_page_size(mock_post, mock_sleep, github_client):
     """504 at MIN_PAGE_SIZE should raise, not loop forever."""
     mock_post.return_value = _make_504_response()
@@ -142,8 +141,8 @@ def test_github_fetch_prs_raises_at_min_page_size(mock_post, mock_sleep, github_
     assert mock_post.call_count == MAX_RETRIES + 1
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.post")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.post")
 def test_github_fetch_prs_logs_giving_up_at_min_page_size(
     mock_post, mock_sleep, github_client, caplog
 ):
@@ -159,8 +158,8 @@ def test_github_fetch_prs_logs_giving_up_at_min_page_size(
     )
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.post")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.post")
 def test_github_fetch_prs_succeeds_first_try(mock_post, mock_sleep, github_client):
     """No 504 → should succeed on the first attempt without page-size reduction."""
     mock_post.return_value = _make_success_github_response()
@@ -171,8 +170,8 @@ def test_github_fetch_prs_succeeds_first_try(mock_post, mock_sleep, github_clien
     assert mock_post.call_count == 1
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.post")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.post")
 def test_github_fetch_prs_multiple_halvings(mock_post, mock_sleep, github_client):
     """504 at page_size=50 → 25 → 12 → succeeds."""
     call_log = []
@@ -202,8 +201,8 @@ def test_github_fetch_prs_multiple_halvings(mock_post, mock_sleep, github_client
 # ── Bitbucket tests ──────────────────────────────────────────────────────────
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.get")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.get")
 def test_bitbucket_fetch_prs_halves_page_size_on_504(
     mock_get, mock_sleep, bitbucket_client
 ):
@@ -231,8 +230,8 @@ def test_bitbucket_fetch_prs_halves_page_size_on_504(
     assert twenty_five_count == 1
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.get")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.get")
 def test_bitbucket_fetch_prs_no_backoff_for_cursor_url(
     mock_get, mock_sleep, bitbucket_client
 ):
@@ -252,8 +251,8 @@ def test_bitbucket_fetch_prs_no_backoff_for_cursor_url(
 # ── GitLab tests ─────────────────────────────────────────────────────────────
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.get")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.get")
 def test_gitlab_fetch_prs_halves_page_size_on_504(mock_get, mock_sleep, gitlab_client):
     """504 at page_size=50 → halves to 25 → succeeds."""
     call_log = []
@@ -279,8 +278,8 @@ def test_gitlab_fetch_prs_halves_page_size_on_504(mock_get, mock_sleep, gitlab_c
     assert twenty_five_count == 1
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.get")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.get")
 def test_gitlab_fetch_prs_raises_at_min_page_size(mock_get, mock_sleep, gitlab_client):
     """504 at MIN_PAGE_SIZE should raise."""
     mock_get.return_value = _make_504_response()
@@ -291,8 +290,8 @@ def test_gitlab_fetch_prs_raises_at_min_page_size(mock_get, mock_sleep, gitlab_c
     assert mock_get.call_count == MAX_RETRIES + 1
 
 
-@patch("platform_clients.time.sleep")
-@patch("platform_clients.requests.get")
+@patch("eval_kit.platform_clients.time.sleep")
+@patch("eval_kit.platform_clients.requests.get")
 def test_gitlab_fetch_prs_logs_giving_up_at_min_page_size(
     mock_get, mock_sleep, gitlab_client, caplog
 ):

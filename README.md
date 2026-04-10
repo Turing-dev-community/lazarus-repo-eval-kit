@@ -13,7 +13,7 @@ This tool analyzes repositories from GitHub or Bitbucket and tells you:
 - **Project activity**: Recent commits and how issues are tracked
 
 
-You can find more information about the Lazarus project in here https://lazarus.turing.com/ 
+You can find more information about the Lazarus project in here https://lazarus.turing.com/
 
 ## Features
 
