@@ -219,7 +219,14 @@ def run_taxonomy_for_accepted_prs(
     classifier = TaxonomyClassifier(
         concurrency=max(1, int(concurrency)),
     )
-    raw_results = classifier.classify_batch(items)
+    try:
+        raw_results = classifier.classify_batch(items)
+    except Exception as e:
+        logger.error(f"Taxonomy classification failed: {e}")
+        # Return error records for all items if batch fails
+        raw_results = [
+            {"error": str(e), "summary": "Error during classification"}
+        ] * len(items)
 
     per_pr_out: list[dict[str, Any]] = []
 
@@ -263,11 +270,15 @@ def run_taxonomy_classification(
         repo,
     )
 
-    classifier = TaxonomyClassifier(concurrency=1)
-    result = classifier.classify(
-        query=query,
-        repo=f"{owner}/{repo}",
-        diff=git_log,
-        language=primary_language,
-    )
-    return _serialise_result(result)
+    try:
+        classifier = TaxonomyClassifier(concurrency=1)
+        result = classifier.classify(
+            query=query,
+            repo=f"{owner}/{repo}",
+            diff=git_log,
+            language=primary_language,
+        )
+        return _serialise_result(result)
+    except Exception as e:
+        logger.error(f"Taxonomy classification failed: {e}")
+        return {}

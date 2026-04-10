@@ -96,8 +96,8 @@ from eval_kit.repo_evaluator_helpers import (
 from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
 from eval_kit.test_runners import F2PP2PAnalyzer, get_runner, preflight_check
 
-load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
-
+if not os.environ.get("REPO_EVAL_SKIP_DOTENV"):
+    load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
