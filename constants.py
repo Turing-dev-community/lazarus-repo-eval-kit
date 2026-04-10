@@ -1,5 +1,8 @@
 import re
 
+MAX_ACCEPTED_PRS = 50
+INITIAL_BATCH_MULTIPLIER = 2
+
 MIN_PR_CODE_CHANGES = 1
 MIN_TEST_FILES = 1
 MAX_NON_TEST_FILES = 100
@@ -9,18 +12,46 @@ MIN_FEATURE_SOURCE_FILES = 3
 MIN_FEATURE_NET_ADDITIONS = 20
 MAX_FEATURE_CHANGED_FILES = 100
 
-DATA_FILE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.csv',
-                        '.json', '.xml', '.yaml', '.yml', '.md', '.txt', '.pdf', '.zip', '.tar', '.gz'}
+DATA_FILE_EXTENSIONS = {
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".svg",
+    ".ico",
+    ".csv",
+    ".json",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".md",
+    ".txt",
+    ".pdf",
+    ".zip",
+    ".tar",
+    ".gz",
+}
 
 OPEN_SOURCE_HINT_FILES = {
-    "LICENSE", "LICENSE.md", "LICENSE.txt",
-    "COPYING", "COPYING.md",
-    "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md",
+    "LICENSE",
+    "LICENSE.md",
+    "LICENSE.txt",
+    "COPYING",
+    "COPYING.md",
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
 }
 
 OPEN_SOURCE_KEYWORDS = (
-    "open source", "opensource", "mit license", "apache license",
-    "gpl", "lgpl", "bsd license", "mozilla public license",
+    "open source",
+    "opensource",
+    "mit license",
+    "apache license",
+    "gpl",
+    "lgpl",
+    "bsd license",
+    "mozilla public license",
 )
 
 AI_MARKER_PATTERNS = [
@@ -35,45 +66,56 @@ AI_MARKER_PATTERNS = [
 ]
 
 GENERIC_COMMIT_PATTERNS = (
-    "update code", "minor fixes", "improvements", "cleanup", "refactor",
+    "update code",
+    "minor fixes",
+    "improvements",
+    "cleanup",
+    "refactor",
 )
 
 FEATURE_POSITIVE_PATTERNS = [
-    re.compile(p, re.IGNORECASE) for p in [
-        r'\badd(?:s|ed|ing)?\b',
-        r'\bimplement(?:s|ed|ing|ation)?\b',
-        r'\bintroduc(?:e|es|ed|ing)\b',
-        r'\bnew\b',
-        r'\bfeature\b',
-        r'\bfeat\b',
-        r'\bsupport\s+(?:for\s+)?\w+',
-        r'\bcreate(?:s|d|ing)?\b',
-        r'\benhance(?:s|d|ment|ments)?\b',
-        r'\bintegrat(?:e|es|ed|ing|ion)\b',
-        r'\bmigrat(?:e|es|ed|ing|ion)\b',
-        r'\bredesign(?:s|ed|ing)?\b',
-        r'\bupgrade(?:s|d|ing)?\b',
-        r'\brevamp',
-        r'\boverhaul',
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"\badd(?:s|ed|ing)?\b",
+        r"\bimplement(?:s|ed|ing|ation)?\b",
+        r"\bintroduc(?:e|es|ed|ing)\b",
+        r"\bnew\b",
+        r"\bfeature\b",
+        r"\bfeat\b",
+        r"\bsupport\s+(?:for\s+)?\w+",
+        r"\bcreate(?:s|d|ing)?\b",
+        r"\benhance(?:s|d|ment|ments)?\b",
+        r"\bintegrat(?:e|es|ed|ing|ion)\b",
+        r"\bmigrat(?:e|es|ed|ing|ion)\b",
+        r"\bredesign(?:s|ed|ing)?\b",
+        r"\bupgrade(?:s|d|ing)?\b",
+        r"\brevamp",
+        r"\boverhaul",
     ]
 ]
 
 FEATURE_NEGATIVE_PATTERNS = [
-    re.compile(p, re.IGNORECASE) for p in [
-        r'\bfix(?:es|ed|ing)?\b',
-        r'\bbug(?:fix)?\b',
-        r'\bhotfix\b',
-        r'\btypo\b',
-        r'\brevert(?:s|ed|ing)?\b',
-        r'\bbump(?:s|ed|ing)?\b',
-        r'\bchore\b',
+    re.compile(p, re.IGNORECASE)
+    for p in [
+        r"\bfix(?:es|ed|ing)?\b",
+        r"\bbug(?:fix)?\b",
+        r"\bhotfix\b",
+        r"\btypo\b",
+        r"\brevert(?:s|ed|ing)?\b",
+        r"\bbump(?:s|ed|ing)?\b",
+        r"\bchore\b",
     ]
 ]
 
-FEATURE_LABEL_POSITIVE = {'feature',
-                          'enhancement', 'new feature', 'improvement'}
-FEATURE_LABEL_NEGATIVE = {'bug', 'bugfix', 'hotfix',
-                          'documentation', 'chore', 'dependencies'}
+FEATURE_LABEL_POSITIVE = {"feature", "enhancement", "new feature", "improvement"}
+FEATURE_LABEL_NEGATIVE = {
+    "bug",
+    "bugfix",
+    "hotfix",
+    "documentation",
+    "chore",
+    "dependencies",
+}
 
 REPO_HEALTH_THRESHOLDS = {
     "repo_age_days_min": 180,
