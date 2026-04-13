@@ -3,8 +3,11 @@ import os
 import random
 import time
 
+import genai_prices
 import httpx
 from pydantic_ai import Agent
+
+from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 
 MAX_RETRIES = int(os.environ.get("LLM_MAX_RETRIES", "8"))
 BASE_DELAY = float(os.environ.get("LLM_BACKOFF_BASE_DELAY", "5.0"))
@@ -47,6 +50,24 @@ def build_model_string(provider: str) -> str:
     model_name = os.getenv("LLM_MODEL") or DEFAULT_MODELS.get(provider, "gpt-4o")
     prefix = PROVIDER_PREFIXES.get(provider, "openai")
     return f"{prefix}:{model_name}"
+
+
+def _track_cost(result, model_str: str, provider: str) -> None:
+    """Compute the USD cost of one agent run and forward it to the tracker.
+
+    Best-effort: any pricing failure is logged and silently ignored so that
+    a missing model entry never breaks the evaluation.
+    """
+    try:
+        model_name = model_str.split(":", 1)[1] if ":" in model_str else model_str
+        price = genai_prices.calc_price(
+            result.usage(), model_name, provider_id=provider
+        )
+        get_tracker().add_cost(price.total_price)
+    except CostLimitAborted:
+        raise
+    except Exception as exc:
+        logger.debug("Cost tracking failed for %s: %s", model_str, exc)
 
 
 def call_llm(
@@ -92,6 +113,7 @@ def call_llm(
             result = agent.run_sync(
                 user_prompt, model_settings={"temperature": temperature}
             )
+            _track_cost(result, model_str, effective_provider)
             return result.output
         except RETRYABLE_ERRORS as e:
             last_err = e

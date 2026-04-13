@@ -69,6 +69,7 @@ from eval_kit.constants import (
     REPO_HEALTH_THRESHOLDS,
 )
 from eval_kit.llm_client import API_KEY_ENV_VARS
+from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 from eval_kit.platform_clients import (
     BitbucketClient,
     GitHubClient,
@@ -2844,7 +2845,11 @@ class RepoEvaluator:
 
                 if not self.skip_f2p and batch_stats.accepted_prs:
                     batch_stats = self._run_f2p_analysis(batch_stats, primary_language)
-                batch_stats = self._run_pr_rubrics(batch_stats, language_config)
+                try:
+                    batch_stats = self._run_pr_rubrics(batch_stats, language_config)
+                except CostLimitAborted:
+                    cumulative_stats = _merge_pr_stats(cumulative_stats, batch_stats)
+                    raise
 
                 # Restore pagination state
                 batch_stats.next_cursor = batch_cursor
@@ -2883,6 +2888,8 @@ class RepoEvaluator:
                     )
                     break
 
+        except CostLimitAborted:
+            logger.warning("LLM cost limit reached — partial PR results will be saved.")
         except Exception as e:
             logger.error(f"Error analyzing PRs: {e}")
 
@@ -3165,6 +3172,7 @@ class RepoEvaluator:
         )
         qe = QualityEvaluator()
         results: List[dict] = []
+        rubric_accepted_count = 0
 
         for pr in pr_analysis.accepted_prs:
             pr_number = pr.get("number")
@@ -3215,6 +3223,9 @@ class RepoEvaluator:
                     commit_message=commit_message,
                     files_changed=files_changed,
                 )
+            except CostLimitAborted:
+                pr_analysis.pr_rubrics = results
+                raise
             except Exception as e:
                 logger.warning("PR rubrics failed for #%s: %s", pr_number, e)
                 entry["error"] = str(e)
@@ -3230,6 +3241,9 @@ class RepoEvaluator:
             entry["rubrics"] = trimmed
             entry["rubric_accepted"] = _is_rubric_accepted(trimmed)
             results.append(entry)
+            if entry["rubric_accepted"]:
+                rubric_accepted_count += 1
+            get_tracker().set_rubric_accepted(rubric_accepted_count)
 
         pr_analysis.pr_rubrics = results
         return pr_analysis
@@ -3358,6 +3372,7 @@ def print_report(report: AnalysisReport):
             if total > 0
             else "Passed Rubrics (& First Filters): 0"
         )
+        print(f"Total LLM Cost: ${float(get_tracker().total_cost):.2f}")
 
     if report.pr_analysis.f2p_results:
         print("\n--- F2P Analysis Results ---")
@@ -3841,6 +3856,7 @@ def main():
             sys.exit(1)
 
     # Run evaluation
+    report_json: dict | None = None
     try:
         evaluator = RepoEvaluator(
             repo_path=repo_path,
@@ -3860,6 +3876,10 @@ def main():
 
         report = evaluator.evaluate()
         report_json = to_json(report)
+
+        if get_tracker().is_aborted:
+            logger.warning("LLM cost limit reached. Saving partial results.")
+            raise CostLimitAborted()
 
         if not args.skip_quality_checks:
             qc_results = run_all_quality_checks(
@@ -3912,39 +3932,8 @@ def main():
             if pr_taxonomy:
                 report_json["pr_taxonomy"] = pr_taxonomy
 
-        # Output
-        if args.json:
-            output = json.dumps(report_json, indent=2)
-            if args.output:
-                Path(args.output).write_text(output)
-                print(f"Results saved to {args.output}")
-                output_path = Path(args.output)
-                csv_path = output_path.parent / f"{repo_name}.csv"
-                write_json_dict_to_csv(report_json, csv_path)
-                print(f"CSV saved to {csv_path}")
-            else:
-                print(output)
-                output_dir = Path(
-                    os.getcwd()
-                    + f"/output_repos_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                )
-                os.makedirs(output_dir, exist_ok=True)
-                json_path = output_dir / f"{args.repo.replace('/', '__')}.json"
-                csv_path = output_dir / f"{repo_name}.csv"
-                with open(json_path, "w") as f:
-                    f.write(output)
-                write_json_dict_to_csv(report_json, csv_path)
-        else:
-            print_report(report)
-            output = json.dumps(report_json, indent=2)
-            output_dir = Path(os.getcwd() + "/output")
-            os.makedirs(output_dir, exist_ok=True)
-            json_path = output_dir / f"{args.repo.replace('/', '__')}.json"
-            csv_path = output_dir / f"{repo_name}.csv"
-            with open(json_path, "w") as f:
-                f.write(output)
-            write_json_dict_to_csv(report_json, csv_path)
-
+    except CostLimitAborted:
+        logger.warning("LLM cost limit reached. Saving partial results.")
     except Exception as e:
         logger.error(f"Error evaluating repository: {e}")
 
@@ -3953,6 +3942,42 @@ def main():
     finally:
         if should_cleanup and temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+    # Output — runs for both normal completion and cost-aborted partial results.
+    if report_json is None:
+        return
+
+    if args.json:
+        output = json.dumps(report_json, indent=2)
+        if args.output:
+            Path(args.output).write_text(output)
+            print(f"Results saved to {args.output}")
+            output_path = Path(args.output)
+            csv_path = output_path.parent / f"{repo_name}.csv"
+            write_json_dict_to_csv(report_json, csv_path)
+            print(f"CSV saved to {csv_path}")
+        else:
+            print(output)
+            output_dir = Path(
+                os.getcwd()
+                + f"/output_repos_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            )
+            os.makedirs(output_dir, exist_ok=True)
+            json_path = output_dir / f"{args.repo.replace('/', '__')}.json"
+            csv_path = output_dir / f"{repo_name}.csv"
+            with open(json_path, "w") as f:
+                f.write(output)
+            write_json_dict_to_csv(report_json, csv_path)
+    else:
+        print_report(report)
+        output = json.dumps(report_json, indent=2)
+        output_dir = Path(os.getcwd() + "/output")
+        os.makedirs(output_dir, exist_ok=True)
+        json_path = output_dir / f"{args.repo.replace('/', '__')}.json"
+        csv_path = output_dir / f"{repo_name}.csv"
+        with open(json_path, "w") as f:
+            f.write(output)
+        write_json_dict_to_csv(report_json, csv_path)
 
 
 if __name__ == "__main__":
