@@ -3172,6 +3172,7 @@ class RepoEvaluator:
         )
         qe = QualityEvaluator()
         results: List[dict] = []
+        rubric_accepted_count = 0
 
         for pr in pr_analysis.accepted_prs:
             pr_number = pr.get("number")
@@ -3240,9 +3241,9 @@ class RepoEvaluator:
             entry["rubrics"] = trimmed
             entry["rubric_accepted"] = _is_rubric_accepted(trimmed)
             results.append(entry)
-            get_tracker().set_rubric_accepted(
-                sum(1 for r in results if r.get("rubric_accepted"))
-            )
+            if entry["rubric_accepted"]:
+                rubric_accepted_count += 1
+            get_tracker().set_rubric_accepted(rubric_accepted_count)
 
         pr_analysis.pr_rubrics = results
         return pr_analysis
