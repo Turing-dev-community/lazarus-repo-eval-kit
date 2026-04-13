@@ -3371,7 +3371,7 @@ def print_report(report: AnalysisReport):
             if total > 0
             else "Passed Rubrics (& First Filters): 0"
         )
-        print(f"Total LLM Cost: ${float(get_tracker()._total_cost):.2f}")
+        print(f"Total LLM Cost: ${float(get_tracker().total_cost):.2f}")
 
     if report.pr_analysis.f2p_results:
         print("\n--- F2P Analysis Results ---")
@@ -3876,7 +3876,7 @@ def main():
         report = evaluator.evaluate()
         report_json = to_json(report)
 
-        if get_tracker()._abort:
+        if get_tracker().is_aborted:
             logger.warning("LLM cost limit reached. Saving partial results.")
             raise CostLimitAborted()
 

@@ -39,16 +39,25 @@ class UsageTracker:
     # Public API
     # ------------------------------------------------------------------
 
+    @property
+    def total_cost(self) -> Decimal:
+        with self._cost_lock:
+            return self._total_cost
+
+    @property
+    def is_aborted(self) -> bool:
+        with self._cost_lock:
+            return self._abort
+
     def add_cost(self, amount: Decimal) -> None:
         """Add *amount* (in USD) to the running total.
 
         Raises CostLimitAborted if the user declines to continue or if
         running non-interactively when the threshold is crossed.
         """
-        if self._abort:
-            raise CostLimitAborted()
-
         with self._cost_lock:
+            if self._abort:
+                raise CostLimitAborted()
             self._total_cost += amount
             should_check = self._total_cost >= self._next_threshold
 
@@ -102,9 +111,9 @@ class UsageTracker:
                 while self._next_threshold <= self._total_cost:
                     self._next_threshold += self._threshold_interval
 
-        # A different thread may have set _abort while we held _prompt_lock.
-        if self._abort:
-            raise CostLimitAborted()
+        with self._cost_lock:
+            if self._abort:
+                raise CostLimitAborted()
 
 
 _tracker: UsageTracker | None = None
