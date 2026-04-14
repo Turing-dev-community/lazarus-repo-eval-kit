@@ -3882,26 +3882,46 @@ def main():
             logger.warning("LLM cost limit reached. Saving partial results.")
             raise CostLimitAborted()
 
+        empty_qc = {
+            "vibe_coding_critical": "",
+            "vibe_coding_signals": "",
+            "vibe_coding_status": "skipped",
+            "security_check_critical": "",
+            "security_check_signals": "",
+            "security_check_status": "skipped",
+            "production_quality_critical": "",
+            "production_quality_signals": "",
+            "production_quality_status": "skipped",
+        }
         if not args.skip_quality_checks:
-            qc_results = run_all_quality_checks(
-                owner=owner,
-                repo=repo_name,
-                token=token or "",
-                skip_llm=args.skip_quality_llm,
-                repo_path=repo_path,
-            )
-            report_json.update(qc_results)
+            try:
+                qc_results = run_all_quality_checks(
+                    owner=owner,
+                    repo=repo_name,
+                    token=token or "",
+                    skip_llm=args.skip_quality_llm,
+                    repo_path=repo_path,
+                )
+                report_json.update(qc_results)
+            except CostLimitAborted:
+                raise
+            except Exception as e:
+                logger.warning(
+                    "Quality checks failed for %s/%s: %s — continuing without them",
+                    owner,
+                    repo_name,
+                    e,
+                )
+                failed_qc = {**empty_qc}
+                for key in (
+                    "vibe_coding_status",
+                    "security_check_status",
+                    "production_quality_status",
+                ):
+                    failed_qc[key] = f"failed: {e}"
+                report_json.update(failed_qc)
         else:
-            report_json.update(
-                {
-                    "vibe_coding_critical": "",
-                    "vibe_coding_signals": "",
-                    "security_check_critical": "",
-                    "security_check_signals": "",
-                    "production_quality_critical": "",
-                    "production_quality_signals": "",
-                }
-            )
+            report_json.update(empty_qc)
 
         if not args.skip_taxonomy:
             pr_analyzer = PRAnalyzer(
