@@ -13,11 +13,37 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from eval_kit.production_quality_check import _check_repo as _check_repo_production
-from eval_kit.security_check import _check_repo as _check_repo_security
-from eval_kit.vibecode_check import _check_repo as _check_repo_vibecode
+from eval_kit.agent_check import (
+    run_production_agent,
+    run_security_agent,
+    run_vibe_agent,
+)
+from eval_kit.repo_evaluator_helpers import clone_repo
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_repo_root(
+    owner: str,
+    repo: str,
+    token: str,
+    repo_path: str | Path | None,
+    tmp_prefix: str,
+) -> tuple[str, str]:
+    """Return (root_path, clone_base_to_cleanup).
+
+    If repo_path is given, resolve and return it with no clone.
+    Otherwise clone into a temp dir and return both root and the temp base.
+    """
+    if repo_path:
+        return str(Path(repo_path).resolve()), ""
+    clone_base = Path(tempfile.mkdtemp(prefix=tmp_prefix))
+    try:
+        root = clone_repo(f"{owner}/{repo}", clone_base, token, depth=200)
+    except Exception:
+        shutil.rmtree(clone_base, ignore_errors=True)
+        raise
+    return str(root), str(clone_base)
 
 
 def run_vibe_coding_check(
@@ -28,25 +54,11 @@ def run_vibe_coding_check(
     repo_path: str | Path | None = None,
 ) -> tuple[str, str]:
     """Run vibecode check. Returns (critical_text, signals_text)."""
-    existing = str(Path(repo_path).resolve()) if repo_path else None
-    clone_base = ""
-    if not existing:
-        clone_base = tempfile.mkdtemp(prefix="vibe_qc_")
-
+    if skip_llm:
+        return "", ""
+    root, clone_base = resolve_repo_root(owner, repo, token, repo_path, "vibe_qc_")
     try:
-        result = _check_repo_vibecode(
-            owner=owner,
-            repo=repo,
-            token=token,
-            clone_base=clone_base or ".",
-            verbose_log=None,
-            skip_llm=skip_llm,
-            existing_repo_path=existing,
-        )
-        if result.get("error"):
-            raise RuntimeError(result["error"])
-        critical = result.get("final_details_critical", [])
-        signals = result.get("final_details_signals", [])
+        critical, signals = run_vibe_agent(root)
         return "\n".join(critical), "\n".join(signals)
     finally:
         if clone_base and os.path.exists(clone_base):
@@ -61,25 +73,11 @@ def run_security_check(
     repo_path: str | Path | None = None,
 ) -> tuple[str, str]:
     """Run security check. Returns (critical_text, signals_text)."""
-    existing = str(Path(repo_path).resolve()) if repo_path else None
-    clone_base = ""
-    if not existing:
-        clone_base = tempfile.mkdtemp(prefix="security_qc_")
-
+    if skip_llm:
+        return "", ""
+    root, clone_base = resolve_repo_root(owner, repo, token, repo_path, "security_qc_")
     try:
-        result = _check_repo_security(
-            owner=owner,
-            repo=repo,
-            token=token,
-            clone_base=clone_base or ".",
-            verbose_log=None,
-            skip_llm=skip_llm,
-            existing_repo_path=existing,
-        )
-        if result.get("error"):
-            raise RuntimeError(result["error"])
-        critical = result.get("final_details_critical", [])
-        signals = result.get("final_details_signals", [])
+        critical, signals = run_security_agent(root)
         return "\n".join(critical), "\n".join(signals)
     finally:
         if clone_base and os.path.exists(clone_base):
@@ -94,25 +92,11 @@ def run_production_quality_check(
     repo_path: str | Path | None = None,
 ) -> tuple[str, str]:
     """Run production quality check. Returns (critical_text, signals_text)."""
-    existing = str(Path(repo_path).resolve()) if repo_path else None
-    clone_base = ""
-    if not existing:
-        clone_base = tempfile.mkdtemp(prefix="prodq_qc_")
-
+    if skip_llm:
+        return "", ""
+    root, clone_base = resolve_repo_root(owner, repo, token, repo_path, "prodq_qc_")
     try:
-        result = _check_repo_production(
-            owner=owner,
-            repo=repo,
-            token=token,
-            clone_base=clone_base or ".",
-            verbose_log=None,
-            skip_llm=skip_llm,
-            existing_repo_path=existing,
-        )
-        if result.get("error"):
-            raise RuntimeError(result["error"])
-        critical = result.get("final_details_critical", [])
-        signals = result.get("final_details_signals", [])
+        critical, signals = run_production_agent(root)
         return "\n".join(critical), "\n".join(signals)
     finally:
         if clone_base and os.path.exists(clone_base):

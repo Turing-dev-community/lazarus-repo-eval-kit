@@ -82,6 +82,7 @@ from eval_kit.quality_evaluator import QualityEvaluator, split_patch_by_test_fil
 from eval_kit.repo_evaluator_helpers import (
     MAX_ISSUE_WORDS,
     MIN_ISSUE_WORDS,
+    clone_repo,
     count_words,
     get_full_patch_content,
     get_language_config,
@@ -3607,36 +3608,6 @@ def write_json_dict_to_csv(data: dict, csv_path: Path) -> None:
         writer = csv.DictWriter(f, fieldnames=list(row.keys()))
         writer.writeheader()
         writer.writerow(row)
-
-
-def clone_repo(
-    repo_full_name: str, temp_dir: Path, token: str, platform: str = "github"
-) -> Path:
-    """Clone repository to temporary directory."""
-
-    if platform == "bitbucket":
-        repo_url = f"https://x-token-auth:{token}@bitbucket.org/{repo_full_name}.git"
-    elif platform == "gitlab":
-        repo_url = f"https://oauth2:{token}@gitlab.com/{repo_full_name}.git"
-    else:  # default to github
-        repo_url = f"https://{token}@github.com/{repo_full_name}.git"
-
-    clone_path = temp_dir / repo_full_name.replace("/", "_")
-
-    logger.info(f"Cloning {repo_full_name} to {clone_path}...")
-    result = subprocess.run(
-        # deep clone so we can get the total commits
-        ["git", "clone", repo_url, str(clone_path)],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to clone repository: {result.stderr}")
-
-    logger.info("Successfully cloned repository")
-    return clone_path
 
 
 def parse_repo_name(repo_string: str) -> Tuple[str, str]:
