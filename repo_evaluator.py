@@ -3789,16 +3789,17 @@ def main():
     )
     if needs_llm:
         provider = os.environ.get("LLM_PROVIDER", "openai").lower()
-        key_var = API_KEY_ENV_VARS.get(provider, "OPENAI_API_KEY")
-        if not os.environ.get(key_var):
-            print(
-                f"Error: {key_var} is required but not set.\n"
-                "\n"
-                "Add it to your .env file:\n"
-                f"  {key_var}=your-key-here\n",
-                file=sys.stderr,
-            )
-            sys.exit(1)
+        if provider != "codex":
+            key_var = API_KEY_ENV_VARS.get(provider, "OPENAI_API_KEY")
+            if not os.environ.get(key_var):
+                print(
+                    f"Error: {key_var} is required but not set.\n"
+                    "\n"
+                    "Add it to your .env file:\n"
+                    f"  {key_var}=your-key-here\n",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
 
     if args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d").replace(
