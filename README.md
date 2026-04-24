@@ -80,11 +80,35 @@ These variables can be added to your `.env` file to control LLM behaviour:
 Example:
 ```
 LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-your-actual-key-here
 LLM_CONCURRENCY=2
 LLM_MAX_RETRIES=10
 LLM_BACKOFF_BASE_DELAY=5.0
 ```
 
+
+### Runtime prerequisites
+
+The evaluator runs tests locally, so the target language toolchain must be installed. The tool auto-detects the runner — make sure the required commands are on your `PATH` before running.
+
+| Language | Test runner | Required commands |
+|---|---|---|
+| Python | pytest / unittest | `python` (pip included via `python -m pip`) |
+| JavaScript / TypeScript | Jest / Vitest / Mocha / Node test | `node`, `npm` |
+| Java | Maven | `mvn`, `java` |
+| Java | Gradle | `gradle`, `java` |
+| Scala | sbt | `sbt` (bundles its own JVM launcher) |
+| Go | go test | `go` |
+| Rust | cargo test | `cargo` |
+| Ruby | RSpec / Minitest | `ruby` |
+| PHP | PHPUnit | `php` |
+| .NET / C# | dotnet test | `dotnet` |
+| .NET Framework | MSBuild | `msbuild` (Windows only) |
+| C / C++ | CMake + CTest | `cmake` (includes `ctest`) |
+| C / C++ | Make | `make` |
+| COBOL | cobol-check | `cobc`, `java` |
+
+If the required runtime is missing, test analysis is skipped automatically and a warning is shown. Repositories without test analysis results may be rejected.
 
 ### Basic Usage
 
