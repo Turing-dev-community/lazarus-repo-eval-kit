@@ -76,20 +76,25 @@ class MavenRunner(TestRunner):
 
     def check_runtime(self) -> Tuple[bool, str]:
         """Check if Maven/Java is available."""
-        # Prefer Maven wrapper if available
-        if not self._check_command_exists("mvn") and not self._check_command_exists(
-            "java"
-        ):
-            return False, "Maven and Java not found"
+        if not self._check_command_exists("mvn"):
+            return False, "Maven (mvn) not found"
+        if not self._check_command_exists("java"):
+            return False, "Java runtime not found"
 
         try:
-            cmd = (
-                ["mvn", "--version"]
-                if self._check_command_exists("mvn")
-                else ["java", "--version"]
+            _, mvn_out, _ = self._run_command(
+                ["mvn", "--version"], Path.cwd(), timeout=30
             )
-            returncode, stdout, stderr = self._run_command(cmd, Path.cwd(), timeout=30)
-            return True, stdout.strip().split("\n")[0]
+            _, java_out, java_err = self._run_command(
+                ["java", "-version"], Path.cwd(), timeout=10
+            )
+            java_info = (
+                (java_out or java_err or "").strip().splitlines()[0]
+                if (java_out or java_err)
+                else "unknown"
+            )
+            mvn_info = mvn_out.strip().splitlines()[0] if mvn_out else "unknown"
+            return True, f"{mvn_info}; {java_info}"
         except Exception as e:
             return False, str(e)
 
@@ -271,19 +276,27 @@ class GradleRunner(TestRunner):
 
     def check_runtime(self) -> Tuple[bool, str]:
         """Check if Gradle/Java is available."""
-        if not self._check_command_exists("gradle") and not self._check_command_exists(
-            "java"
-        ):
-            return False, "Gradle and Java not found"
+        if not self._check_command_exists("gradle"):
+            return False, "Gradle (gradle) not found"
+        if not self._check_command_exists("java"):
+            return False, "Java runtime not found"
 
         try:
-            cmd = (
-                ["gradle", "--version"]
-                if self._check_command_exists("gradle")
-                else ["java", "--version"]
+            _, gradle_out, _ = self._run_command(
+                ["gradle", "--version"], Path.cwd(), timeout=30
             )
-            returncode, stdout, stderr = self._run_command(cmd, Path.cwd(), timeout=30)
-            return True, stdout.strip().split("\n")[0]
+            _, java_out, java_err = self._run_command(
+                ["java", "-version"], Path.cwd(), timeout=10
+            )
+            java_info = (
+                (java_out or java_err or "").strip().splitlines()[0]
+                if (java_out or java_err)
+                else "unknown"
+            )
+            gradle_info = (
+                gradle_out.strip().splitlines()[0] if gradle_out else "unknown"
+            )
+            return True, f"{gradle_info}; {java_info}"
         except Exception as e:
             return False, str(e)
 
