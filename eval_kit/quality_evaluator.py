@@ -418,6 +418,192 @@ Respond with ONLY JSON (use "This change" not "This commit/PR" in rejection_reas
 """
 
 
+FAIRNESS_EVAL_PROMPT = """\
+You are evaluating a SWE benchmark task for fairness BEFORE any agent runs.
+For each F2P (fail-to-pass) test listed, determine if an agent could reasonably pass it
+given only the spec and hints — or if the test is unfair.
+
+F2P tests to evaluate:
+{test_list}
+
+=== SPEC / ISSUE ===
+{problem_statement}
+
+{hints_section}
+
+=== GOLD SOURCE DIFF ===
+{src_diff}
+
+=== GOLD TEST DIFF ===
+{test_diff}
+
+## CLASSIFICATION RULES
+
+### UNFAIR when (tag each with one of):
+- Spec gap: requirement completely absent from spec/hints — agent had no way to know
+- Ambiguous spec: spec exists but vague; test enforces one specific interpretation
+- Test too coupled to gold: test asserts internal implementation detail only visible in gold src (algorithm choice, internal variable names, specific library, exact arithmetic)
+- Test contradicts spec: test enforces behavior that contradicts what spec explicitly states
+- Hidden test: feature in test not mentioned in spec, hints, or gold src public interface
+- Test quality flaw: wrong assertion, broken fixture, checks magic values not in spec
+
+### FAIR when:
+1. Spec explicitly states the requirement
+2. Hints document the exact contract
+3. Test checks observable public behavior any correct implementation must satisfy
+4. Return type, function signature, field name visible in spec/hints
+5. Standard coding practice (error handling, status codes, empty array returns)
+
+### CASCADE RULE:
+One root cause → many failures → all share same verdict
+
+Respond with ONLY this JSON (no markdown, no extra text):
+
+{{
+  "fairness_rationale": "<one sentence summary>",
+  "f2p_tests": [
+    {{
+      "test_name": "<short description max 40 chars>",
+      "in_spec": <true or false>,
+      "tests_good": <true or false>,
+      "verdict": "<Fair or Unfair>",
+      "notes": "<one phrase, name unfair tag if Unfair, max 60 chars>"
+    }}
+  ]
+}}
+"""
+
+
+def extract_test_names(diff_text: str) -> List[str]:
+    """Extract test names from added lines in a test diff."""
+    tests: List[str] = []
+    describe_stack: List[str] = []
+    brace_depth_stack: List[int] = []
+    depth = 0
+
+    for line in diff_text.split("\n"):
+        if not line.startswith("+") or line.startswith("+++"):
+            continue
+        src = line[1:]
+
+        depth += src.count("{") - src.count("}")
+
+        m = re.match(r"\s*(?:describe|suite)\s*\(\s*['\"`](.+?)['\"`]\s*,", src)
+        if m:
+            describe_stack.append(m.group(1))
+            brace_depth_stack.append(depth)
+            continue
+
+        while brace_depth_stack and depth < brace_depth_stack[-1]:
+            describe_stack.pop()
+            brace_depth_stack.pop()
+
+        m = re.match(r"\s*(?:it|test)\s*\(\s*['\"`](.+?)['\"`]\s*,", src)
+        if m:
+            test_name = m.group(1)
+            full_name = (
+                " > ".join(describe_stack) + " > " + test_name
+                if describe_stack
+                else test_name
+            )
+            if full_name not in tests:
+                tests.append(full_name)
+
+    return tests
+
+
+class FairnessEvaluator:
+    def __init__(self, max_diff_lines: int = 1000):
+        self.max_diff_lines = max_diff_lines
+
+    def evaluate(
+        self,
+        src_diff: str,
+        test_diff: str,
+        problem_statement: str,
+        hints: str = "",
+    ) -> Optional[dict]:
+        """Evaluate fairness of F2P tests. Returns fairness_score, fairness_rationale,
+        and f2p_tests_fairness_analysis, or None on failure."""
+        tests = extract_test_names(test_diff)
+        test_list = (
+            "\n".join(f"  - {t}" for t in tests)
+            if tests
+            else "  (extracted from test diff below)"
+        )
+        hints_section = f"=== HINTS ===\n{hints}" if hints else "(No hints provided)"
+
+        prompt = FAIRNESS_EVAL_PROMPT.format(
+            test_list=test_list,
+            problem_statement=problem_statement or "(Not provided)",
+            hints_section=hints_section,
+            src_diff=self._truncate_diff(src_diff) or "(No source changes)",
+            test_diff=self._truncate_diff(test_diff) or "(No test changes)",
+        )
+
+        data = self._parse_json_response(self._call_llm(prompt))
+        if not data:
+            return None
+
+        f2p_tests = data.get("f2p_tests", [])
+        fair_count = sum(1 for t in f2p_tests if t.get("verdict") == "Fair")
+        total = len(f2p_tests)
+        fairness_score = round(fair_count / total, 2) if total > 0 else 0.0
+
+        return {
+            "fairness_score": fairness_score,
+            "fairness_rationale": data.get("fairness_rationale", ""),
+            "f2p_tests_fairness_analysis": f2p_tests,
+        }
+
+    def _truncate_diff(self, diff: str) -> str:
+        if not diff:
+            return ""
+        lines = diff.split("\n")
+        if len(lines) <= self.max_diff_lines:
+            return diff
+        return (
+            "\n".join(lines[: self.max_diff_lines])
+            + f"\n\n... ({len(lines) - self.max_diff_lines} more lines truncated)"
+        )
+
+    def _call_llm(self, prompt: str) -> Optional[str]:
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a code review assistant. Respond only with valid JSON.",
+            },
+            {"role": "user", "content": prompt},
+        ]
+        return call_llm(messages, temperature=0)
+
+    def _parse_json_response(self, response: str) -> Optional[dict]:
+        if not response:
+            return None
+        try:
+            text = response.strip()
+            if "```json" in text:
+                text = text.split("```json")[1].split("```")[0].strip()
+            elif "```" in text:
+                parts = text.split("```")
+                if len(parts) >= 2:
+                    text = parts[1].strip()
+                    if text.startswith(("json", "JSON")):
+                        text = text[4:].strip()
+            try:
+                return json.loads(text)
+            except json.JSONDecodeError:
+                pass
+            text = re.sub(r",\s*([}\]])", r"\1", text)
+            match = re.search(r"\{[\s\S]*\}", text)
+            if match:
+                text = match.group(0)
+            return json.loads(text)
+        except (json.JSONDecodeError, IndexError) as e:
+            logger.error(f"FairnessEvaluator failed to parse JSON: {e}")
+            return None
+
+
 class QualityEvaluator:
     def __init__(
         self,
