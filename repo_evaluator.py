@@ -3877,8 +3877,12 @@ def main():
             sys.exit(1)
 
     from eval_kit.enterprise_signals.collectors.incident import IncidentSignalCollector
+    from eval_kit.enterprise_signals.collectors.enterprise_domain import (
+        EnterpriseDomainCollector,
+    )
 
     register_pr_collector(IncidentSignalCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(EnterpriseDomainCollector(skip_llm=args.skip_quality_llm))
 
     if args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d").replace(
