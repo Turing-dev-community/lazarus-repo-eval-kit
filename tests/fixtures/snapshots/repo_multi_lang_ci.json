@@ -1,0 +1,104 @@
+{
+  "pr_analysis": {
+    "avg_loc_per_pr": 0.0,
+    "issue_linked_pr_ratio": 0.0,
+    "pass_first_filter": 0,
+    "pass_first_filter_prs": [],
+    "pass_first_filter_rate": 0.0,
+    "pr_first_date": null,
+    "pr_last_date": null,
+    "pr_spread_days": 0,
+    "pr_unique_dates_count": 0,
+    "rejected": 0,
+    "total_prs": 0
+  },
+  "pr_rubrics": [],
+  "pr_rubrics_false_negatives": 0,
+  "pr_rubrics_false_positives": 0,
+  "pr_rubrics_gold_patch_clarity": 0,
+  "pr_rubrics_gold_patch_issue_alignment": 0,
+  "pr_rubrics_issue_clarity": 0,
+  "pr_rubrics_test_clarity": 0,
+  "pr_rubrics_test_issue_alignment": 0,
+  "repo_full_name": "fake/multi_lang_ci",
+  "repo_metrics": {
+    "ai_risk_level": "low",
+    "ai_risk_score": 0,
+    "ai_risk_signals": [],
+    "avg_loc_per_commit": 43.5,
+    "avg_loc_per_pr": 0.0,
+    "branch_count": 2,
+    "ci_files": [
+      ".github/workflows"
+    ],
+    "closed_issues": 0,
+    "code_churn_rate": 0.125,
+    "comment_density": 0.0,
+    "commit_message_avg_len": 33.33,
+    "commit_message_median_len": 31,
+    "commit_message_unique_ratio": 1.0,
+    "commit_message_variance": 282.89,
+    "commit_spread_ratio": 0.0492,
+    "commits_referencing_issues": 0,
+    "contributors_total": 1,
+    "distinct_commit_days": 3,
+    "first_5_commits_loc": [
+      35,
+      52
+    ],
+    "first_commit_loc": 52,
+    "has_ci_cd": true,
+    "has_test_runner": true,
+    "issue_linked_pr_ratio": 0.0,
+    "languages": {
+      "JavaScript": 3,
+      "Python": 9
+    },
+    "median_commit_interval_hours": null,
+    "median_loc_per_commit": 43.5,
+    "open_issues": 0,
+    "open_source_likelihood": "low",
+    "open_source_score": 0,
+    "open_source_signals": [],
+    "pr_acceptance_rate": 0.0,
+    "pr_to_commit_ratio": 0.0,
+    "primary_language": "Python",
+    "readme_has_badges": false,
+    "readme_has_installation": false,
+    "readme_has_usage": true,
+    "readme_length_chars": 101,
+    "recent_commits_12m": 0,
+    "recent_commits_12mo": 0,
+    "recent_commits_6mo": 0,
+    "repo_age_days": 61,
+    "repo_name": "multi_lang_ci",
+    "single_commit_loc_share": 0.5977,
+    "source_files": 7,
+    "source_loc": 27,
+    "test_files": 4,
+    "test_files_to_source_files_ratio": 0.5714,
+    "test_frameworks": [
+      "pytest"
+    ],
+    "test_loc": 17,
+    "test_loc_to_source_loc_ratio": 0.6296,
+    "test_to_source_file_ratio": 0.5714,
+    "top10_commit_loc_share": 1.0,
+    "top_10_commits_by_loc": [
+      {
+        "loc": 52,
+        "sha": "209d9f04f6bc5a397daa7997c7acfb93c8eff882"
+      },
+      {
+        "loc": 35,
+        "sha": "2b88916a2700cc5d895b313c56811573797b340e"
+      }
+    ],
+    "total_commits": 3,
+    "total_files": 16,
+    "total_issues": 0,
+    "total_loc": 44,
+    "unique_commit_spread_days": 3
+  },
+  "repo_name": "multi_lang_ci"
+}

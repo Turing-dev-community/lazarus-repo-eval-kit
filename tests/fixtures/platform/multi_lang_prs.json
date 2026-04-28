@@ -1,0 +1,293 @@
+{
+  "data": {
+    "repository": {
+      "primaryLanguage": {
+        "name": "Python"
+      },
+      "pullRequests": {
+        "pageInfo": {
+          "endCursor": null,
+          "hasNextPage": false
+        },
+        "nodes": [
+          {
+            "number": 1,
+            "title": "chore: automated CI update",
+            "body": "",
+            "url": "https://github.com/fake/repo/pull/1",
+            "baseRefOid": "0000000000000000000000000000000000000011",
+            "headRefOid": "0000000000000000000000000000000000000012",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-1",
+            "createdAt": "2024-01-05T10:00:00Z",
+            "mergedAt": "2024-01-05T11:00:00Z",
+            "author": {
+              "__typename": "Bot",
+              "login": "github-actions[bot]"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": ".github/workflows/ci.yml",
+                  "additions": 1,
+                  "deletions": 1,
+                  "changeType": "MODIFIED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": []
+            },
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 2,
+            "title": "refactor: reorganize source files",
+            "body": "Moving source files around, no test changes.",
+            "url": "https://github.com/fake/repo/pull/2",
+            "baseRefOid": "0000000000000000000000000000000000000013",
+            "headRefOid": "0000000000000000000000000000000000000014",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-2",
+            "createdAt": "2024-01-20T10:00:00Z",
+            "mergedAt": "2024-01-20T12:00:00Z",
+            "author": {
+              "__typename": "User",
+              "login": "bob"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "src/module_0.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/module_1.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/module_2.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/module_3.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/module_4.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/module_5.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": []
+            },
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 3,
+            "title": "fix: typo in calculator",
+            "body": "Fix a small typo.",
+            "url": "https://github.com/fake/repo/pull/3",
+            "baseRefOid": "0000000000000000000000000000000000000015",
+            "headRefOid": "0000000000000000000000000000000000000016",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-3",
+            "createdAt": "2024-02-10T10:00:00Z",
+            "mergedAt": "2024-02-10T11:00:00Z",
+            "author": {
+              "__typename": "User",
+              "login": "carol"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "src/calculator.py",
+                  "additions": 1,
+                  "deletions": 1,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "tests/test_calculator.py",
+                  "additions": 1,
+                  "deletions": 0,
+                  "changeType": "MODIFIED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": []
+            },
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 4,
+            "title": "feat: add logging module",
+            "body": "Closes #99",
+            "url": "https://github.com/fake/repo/pull/4",
+            "baseRefOid": "0000000000000000000000000000000000000017",
+            "headRefOid": "0000000000000000000000000000000000000018",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-4",
+            "createdAt": "2024-02-15T10:00:00Z",
+            "mergedAt": "2024-02-15T12:00:00Z",
+            "author": {
+              "__typename": "User",
+              "login": "dave"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "src/logging_0.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/logging_1.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/logging_2.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/logging_3.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "tests/test_logging_0.py",
+                  "additions": 8,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "tests/test_logging_1.py",
+                  "additions": 8,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "tests/test_logging_2.py",
+                  "additions": 8,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": [
+                {
+                  "__typename": "Issue",
+                  "number": 99,
+                  "state": "CLOSED",
+                  "body": "Add logging."
+                }
+              ]
+            },
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 5,
+            "title": "feat: extend calculator with division and add statistics module",
+            "body": "Adds divide/subtract to calculator, new statistics.py and constants.py.",
+            "url": "https://github.com/fake/repo/pull/5",
+            "baseRefOid": "209d9f04f6bc5a397daa7997c7acfb93c8eff882",
+            "headRefOid": "2b88916a2700cc5d895b313c56811573797b340e",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-5",
+            "createdAt": "2024-03-01T09:00:00Z",
+            "mergedAt": "2024-03-02T09:00:00Z",
+            "author": {
+              "__typename": "User",
+              "login": "eve"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "src/calculator.py",
+                  "additions": 8,
+                  "deletions": 0,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/statistics.py",
+                  "additions": 6,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/constants.py",
+                  "additions": 3,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "lib/math_utils.js",
+                  "additions": 3,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "tests/test_calculator.py",
+                  "additions": 8,
+                  "deletions": 2,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "tests/test_statistics.py",
+                  "additions": 7,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": [
+                {
+                  "__typename": "Issue",
+                  "number": 101,
+                  "state": "CLOSED",
+                  "body": "The calculator module needs to support division and subtraction operations. We should also add a statistics module with mean and median functions, and a constants module for shared values. All new functions must have corresponding tests."
+                }
+              ]
+            },
+            "labels": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

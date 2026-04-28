@@ -1,0 +1,190 @@
+{
+  "acceptance_rate": 0.333,
+  "accepted": 1,
+  "accepted_prs": [
+    {
+      "author": {
+        "__typename": "User",
+        "login": "alice"
+      },
+      "baseRefName": "main",
+      "baseRefOid": "c4938b75163db29673af7fa546a7c3542bdf2477",
+      "body": "Adds clamp, square, cube helpers and extends existing tests.",
+      "closingIssuesReferences": {
+        "nodes": [
+          {
+            "__typename": "Issue",
+            "body": "We need a helpers module to provide shared utility functions like clamp, square and cube. These are used in both the main module and utils module but are currently duplicated. This PR adds the helpers module and updates the existing tests to use the new helpers.",
+            "number": 42,
+            "state": "CLOSED"
+          }
+        ]
+      },
+      "createdAt": "2024-02-01T09:00:00Z",
+      "files": {
+        "nodes": [
+          {
+            "additions": 8,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/helpers.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "src/main.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "src/utils.py"
+          },
+          {
+            "additions": 10,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_helpers.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "tests/test_main.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "tests/test_utils.py"
+          }
+        ]
+      },
+      "headRefName": "feature/pr-3",
+      "headRefOid": "53f6fb0a619b46c714426c783290f1a19d48afb6",
+      "labels": {
+        "nodes": []
+      },
+      "mergedAt": "2024-02-02T09:00:00Z",
+      "number": 3,
+      "title": "feat: add helpers module",
+      "url": "https://github.com/fake/repo/pull/3"
+    }
+  ],
+  "avg_loc_per_pr": 160.67,
+  "f2p_results": null,
+  "f2p_skipped_reason": null,
+  "fairness_eval": null,
+  "feature_accepted": 1,
+  "feature_accepted_prs": [
+    {
+      "author": {
+        "__typename": "User",
+        "login": "alice"
+      },
+      "baseRefName": "main",
+      "baseRefOid": "c4938b75163db29673af7fa546a7c3542bdf2477",
+      "body": "Adds clamp, square, cube helpers and extends existing tests.",
+      "closingIssuesReferences": {
+        "nodes": [
+          {
+            "__typename": "Issue",
+            "body": "We need a helpers module to provide shared utility functions like clamp, square and cube. These are used in both the main module and utils module but are currently duplicated. This PR adds the helpers module and updates the existing tests to use the new helpers.",
+            "number": 42,
+            "state": "CLOSED"
+          }
+        ]
+      },
+      "createdAt": "2024-02-01T09:00:00Z",
+      "feature_score": 2,
+      "feature_signals": [
+        "title_feature_keyword"
+      ],
+      "files": {
+        "nodes": [
+          {
+            "additions": 8,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/helpers.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "src/main.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "src/utils.py"
+          },
+          {
+            "additions": 10,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_helpers.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "tests/test_main.py"
+          },
+          {
+            "additions": 4,
+            "changeType": "MODIFIED",
+            "deletions": 1,
+            "path": "tests/test_utils.py"
+          }
+        ]
+      },
+      "headRefName": "feature/pr-3",
+      "headRefOid": "53f6fb0a619b46c714426c783290f1a19d48afb6",
+      "labels": {
+        "nodes": []
+      },
+      "mergedAt": "2024-02-02T09:00:00Z",
+      "number": 3,
+      "title": "feat: add helpers module",
+      "url": "https://github.com/fake/repo/pull/3"
+    }
+  ],
+  "feature_rejection_breakdown": {
+    "bot_pr": {
+      "count": 1,
+      "percentage": 50.0
+    },
+    "no_new_files": {
+      "count": 1,
+      "percentage": 50.0
+    }
+  },
+  "has_more_pages": false,
+  "issue_linked_pr_ratio": 0.333,
+  "next_cursor": null,
+  "pr_first_date": "2024-01-10",
+  "pr_last_date": "2024-02-01",
+  "pr_rubrics": null,
+  "pr_spread_days": 21,
+  "pr_unique_dates": [
+    "2024-01-10",
+    "2024-01-15",
+    "2024-02-01"
+  ],
+  "pr_unique_dates_count": 3,
+  "rejected": 2,
+  "rejection_breakdown": {
+    "bot_pr": {
+      "count": 1,
+      "percentage": 50.0
+    },
+    "fewer_than_min_test_files": {
+      "count": 1,
+      "percentage": 50.0
+    }
+  },
+  "total_prs": 3
+}

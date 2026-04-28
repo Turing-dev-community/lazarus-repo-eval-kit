@@ -19,3 +19,5 @@ docs/
 logs/
 output_*/**
 .env
+.cursor
+tests/fixtures/repos/

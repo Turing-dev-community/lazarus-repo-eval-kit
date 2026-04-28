@@ -1,0 +1,286 @@
+{
+  "acceptance_rate": 0.2,
+  "accepted": 1,
+  "accepted_prs": [
+    {
+      "author": {
+        "__typename": "User",
+        "login": "eve"
+      },
+      "baseRefName": "main",
+      "baseRefOid": "209d9f04f6bc5a397daa7997c7acfb93c8eff882",
+      "body": "Adds divide/subtract to calculator, new statistics.py and constants.py.",
+      "closingIssuesReferences": {
+        "nodes": [
+          {
+            "__typename": "Issue",
+            "body": "The calculator module needs to support division and subtraction operations. We should also add a statistics module with mean and median functions, and a constants module for shared values. All new functions must have corresponding tests.",
+            "number": 101,
+            "state": "CLOSED"
+          }
+        ]
+      },
+      "createdAt": "2024-03-01T09:00:00Z",
+      "files": {
+        "nodes": [
+          {
+            "additions": 3,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "lib/math_utils.js"
+          },
+          {
+            "additions": 8,
+            "changeType": "MODIFIED",
+            "deletions": 0,
+            "path": "src/calculator.py"
+          },
+          {
+            "additions": 3,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/constants.py"
+          },
+          {
+            "additions": 6,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/statistics.py"
+          },
+          {
+            "additions": 8,
+            "changeType": "MODIFIED",
+            "deletions": 2,
+            "path": "tests/test_calculator.py"
+          },
+          {
+            "additions": 7,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_statistics.py"
+          }
+        ]
+      },
+      "headRefName": "feature/pr-5",
+      "headRefOid": "2b88916a2700cc5d895b313c56811573797b340e",
+      "labels": {
+        "nodes": []
+      },
+      "mergedAt": "2024-03-02T09:00:00Z",
+      "number": 5,
+      "title": "feat: extend calculator with division and add statistics module",
+      "url": "https://github.com/fake/repo/pull/5"
+    }
+  ],
+  "avg_loc_per_pr": 33.2,
+  "f2p_results": null,
+  "f2p_skipped_reason": null,
+  "fairness_eval": null,
+  "feature_accepted": 2,
+  "feature_accepted_prs": [
+    {
+      "author": {
+        "__typename": "User",
+        "login": "dave"
+      },
+      "baseRefName": "main",
+      "baseRefOid": "0000000000000000000000000000000000000017",
+      "body": "Closes #99",
+      "closingIssuesReferences": {
+        "nodes": [
+          {
+            "__typename": "Issue",
+            "body": "Add logging.",
+            "number": 99,
+            "state": "CLOSED"
+          }
+        ]
+      },
+      "createdAt": "2024-02-15T10:00:00Z",
+      "feature_score": 4,
+      "feature_signals": [
+        "net_additions:64",
+        "new_files:7",
+        "title_feature_keyword"
+      ],
+      "files": {
+        "nodes": [
+          {
+            "additions": 10,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/logging_0.py"
+          },
+          {
+            "additions": 10,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/logging_1.py"
+          },
+          {
+            "additions": 10,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/logging_2.py"
+          },
+          {
+            "additions": 10,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/logging_3.py"
+          },
+          {
+            "additions": 8,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_logging_0.py"
+          },
+          {
+            "additions": 8,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_logging_1.py"
+          },
+          {
+            "additions": 8,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_logging_2.py"
+          }
+        ]
+      },
+      "headRefName": "feature/pr-4",
+      "headRefOid": "0000000000000000000000000000000000000018",
+      "labels": {
+        "nodes": []
+      },
+      "mergedAt": "2024-02-15T12:00:00Z",
+      "number": 4,
+      "title": "feat: add logging module",
+      "url": "https://github.com/fake/repo/pull/4"
+    },
+    {
+      "author": {
+        "__typename": "User",
+        "login": "eve"
+      },
+      "baseRefName": "main",
+      "baseRefOid": "209d9f04f6bc5a397daa7997c7acfb93c8eff882",
+      "body": "Adds divide/subtract to calculator, new statistics.py and constants.py.",
+      "closingIssuesReferences": {
+        "nodes": [
+          {
+            "__typename": "Issue",
+            "body": "The calculator module needs to support division and subtraction operations. We should also add a statistics module with mean and median functions, and a constants module for shared values. All new functions must have corresponding tests.",
+            "number": 101,
+            "state": "CLOSED"
+          }
+        ]
+      },
+      "createdAt": "2024-03-01T09:00:00Z",
+      "feature_score": 3,
+      "feature_signals": [
+        "cross_directory:3",
+        "title_feature_keyword"
+      ],
+      "files": {
+        "nodes": [
+          {
+            "additions": 3,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "lib/math_utils.js"
+          },
+          {
+            "additions": 8,
+            "changeType": "MODIFIED",
+            "deletions": 0,
+            "path": "src/calculator.py"
+          },
+          {
+            "additions": 3,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/constants.py"
+          },
+          {
+            "additions": 6,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "src/statistics.py"
+          },
+          {
+            "additions": 8,
+            "changeType": "MODIFIED",
+            "deletions": 2,
+            "path": "tests/test_calculator.py"
+          },
+          {
+            "additions": 7,
+            "changeType": "ADDED",
+            "deletions": 0,
+            "path": "tests/test_statistics.py"
+          }
+        ]
+      },
+      "headRefName": "feature/pr-5",
+      "headRefOid": "2b88916a2700cc5d895b313c56811573797b340e",
+      "labels": {
+        "nodes": []
+      },
+      "mergedAt": "2024-03-02T09:00:00Z",
+      "number": 5,
+      "title": "feat: extend calculator with division and add statistics module",
+      "url": "https://github.com/fake/repo/pull/5"
+    }
+  ],
+  "feature_rejection_breakdown": {
+    "bot_pr": {
+      "count": 1,
+      "percentage": 33.3
+    },
+    "low_feature_score": {
+      "count": 1,
+      "percentage": 33.3
+    },
+    "too_few_source_files": {
+      "count": 1,
+      "percentage": 33.3
+    }
+  },
+  "has_more_pages": false,
+  "issue_linked_pr_ratio": 0.4,
+  "next_cursor": null,
+  "pr_first_date": "2024-01-05",
+  "pr_last_date": "2024-03-01",
+  "pr_rubrics": null,
+  "pr_spread_days": 55,
+  "pr_unique_dates": [
+    "2024-01-05",
+    "2024-01-20",
+    "2024-02-10",
+    "2024-02-15",
+    "2024-03-01"
+  ],
+  "pr_unique_dates_count": 5,
+  "rejected": 4,
+  "rejection_breakdown": {
+    "bot_pr": {
+      "count": 1,
+      "percentage": 25.0
+    },
+    "difficulty_not_hard": {
+      "count": 1,
+      "percentage": 25.0
+    },
+    "fewer_than_min_test_files": {
+      "count": 1,
+      "percentage": 25.0
+    },
+    "issue_word_count": {
+      "count": 1,
+      "percentage": 25.0
+    }
+  },
+  "total_prs": 5
+}
