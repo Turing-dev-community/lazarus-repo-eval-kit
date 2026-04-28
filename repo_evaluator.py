@@ -3949,9 +3949,10 @@ def main():
                 if pr.get("number") in rubric_accepted_numbers
             ]
             if rubric_accepted_prs:
+                fairness_lang_config = load_language_config()
                 fairness_pr_analyzer = PRAnalyzer(
                     platform_client=platform_client,
-                    language_config=load_language_config(),
+                    language_config=fairness_lang_config,
                     repo_path=repo_path,
                     min_test_files=args.min_test_files,
                     max_non_test_files=args.max_non_test_files,
@@ -3960,36 +3961,41 @@ def main():
                 )
                 fe = FairnessEvaluator()
                 fairness_results: List[dict] = []
-                for pr in rubric_accepted_prs:
-                    pr_number = pr.get("number")
-                    if args.pr_number is not None and pr_number != args.pr_number:
-                        continue
-                    entry: dict = {"number": pr_number}
-                    base_sha = pr.get("baseRefOid", "") or ""
-                    head_sha = pr.get("headRefOid", "") or ""
-                    if not base_sha or not head_sha:
-                        entry["error"] = "missing base or head SHA"
+                try:
+                    for pr in rubric_accepted_prs:
+                        pr_number = pr.get("number")
+                        if args.pr_number is not None and pr_number != args.pr_number:
+                            continue
+                        entry: dict = {"number": pr_number}
+                        base_sha = pr.get("baseRefOid", "") or ""
+                        head_sha = pr.get("headRefOid", "") or ""
+                        if not base_sha or not head_sha:
+                            entry["error"] = "missing base or head SHA"
+                            fairness_results.append(entry)
+                            continue
+                        full_patch = fairness_pr_analyzer._get_patch_from_git(
+                            base_sha, head_sha, pr_number=pr_number
+                        )
+                        if not full_patch:
+                            entry["error"] = "could not retrieve patch"
+                            fairness_results.append(entry)
+                            continue
+                        src_diff, test_diff = split_patch_by_test_files(
+                            full_patch,
+                            lambda path, cfg: is_test_file_path(path, cfg),
+                            fairness_lang_config,
+                        )
+                        problem_statement = _problem_statement_for_pr(pr)
+                        result = fe.evaluate(src_diff, test_diff, problem_statement)
+                        if result:
+                            entry.update(result)
+                        else:
+                            entry["error"] = "fairness evaluation failed"
                         fairness_results.append(entry)
-                        continue
-                    full_patch = fairness_pr_analyzer._get_patch_from_git(
-                        base_sha, head_sha, pr_number=pr_number
-                    )
-                    if not full_patch:
-                        entry["error"] = "could not retrieve patch"
-                        fairness_results.append(entry)
-                        continue
-                    src_diff, test_diff = split_patch_by_test_files(
-                        full_patch,
-                        lambda path, cfg: is_test_file_path(path, cfg),
-                        load_language_config(),
-                    )
-                    problem_statement = _problem_statement_for_pr(pr)
-                    result = fe.evaluate(src_diff, test_diff, problem_statement)
-                    if result:
-                        entry.update(result)
-                    else:
-                        entry["error"] = "fairness evaluation failed"
-                    fairness_results.append(entry)
+                except CostLimitAborted:
+                    if fairness_results:
+                        report_json["fairness_eval"] = fairness_results
+                    raise
                 if fairness_results:
                     report_json["fairness_eval"] = fairness_results
 

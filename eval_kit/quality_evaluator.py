@@ -423,9 +423,6 @@ You are evaluating a SWE benchmark task for fairness BEFORE any agent runs.
 For each F2P (fail-to-pass) test listed, determine if an agent could reasonably pass it
 given only the spec and hints — or if the test is unfair.
 
-F2P tests to evaluate:
-{test_list}
-
 === SPEC / ISSUE ===
 {problem_statement}
 
@@ -474,44 +471,6 @@ Respond with ONLY this JSON (no markdown, no extra text):
 """
 
 
-def extract_test_names(diff_text: str) -> List[str]:
-    """Extract test names from added lines in a test diff."""
-    tests: List[str] = []
-    describe_stack: List[str] = []
-    brace_depth_stack: List[int] = []
-    depth = 0
-
-    for line in diff_text.split("\n"):
-        if not line.startswith("+") or line.startswith("+++"):
-            continue
-        src = line[1:]
-
-        depth += src.count("{") - src.count("}")
-
-        m = re.match(r"\s*(?:describe|suite)\s*\(\s*['\"`](.+?)['\"`]\s*,", src)
-        if m:
-            describe_stack.append(m.group(1))
-            brace_depth_stack.append(depth)
-            continue
-
-        while brace_depth_stack and depth < brace_depth_stack[-1]:
-            describe_stack.pop()
-            brace_depth_stack.pop()
-
-        m = re.match(r"\s*(?:it|test)\s*\(\s*['\"`](.+?)['\"`]\s*,", src)
-        if m:
-            test_name = m.group(1)
-            full_name = (
-                " > ".join(describe_stack) + " > " + test_name
-                if describe_stack
-                else test_name
-            )
-            if full_name not in tests:
-                tests.append(full_name)
-
-    return tests
-
-
 class FairnessEvaluator:
     def __init__(self, max_diff_lines: int = 1000):
         self.max_diff_lines = max_diff_lines
@@ -525,16 +484,9 @@ class FairnessEvaluator:
     ) -> Optional[dict]:
         """Evaluate fairness of F2P tests. Returns fairness_score, fairness_rationale,
         and f2p_tests_fairness_analysis, or None on failure."""
-        tests = extract_test_names(test_diff)
-        test_list = (
-            "\n".join(f"  - {t}" for t in tests)
-            if tests
-            else "  (extracted from test diff below)"
-        )
         hints_section = f"=== HINTS ===\n{hints}" if hints else "(No hints provided)"
 
         prompt = FAIRNESS_EVAL_PROMPT.format(
-            test_list=test_list,
             problem_statement=problem_statement or "(Not provided)",
             hints_section=hints_section,
             src_diff=self._truncate_diff(src_diff) or "(No source changes)",
