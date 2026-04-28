@@ -1,0 +1,16 @@
+{
+  "data": {
+    "repository": {
+      "primaryLanguage": {
+        "name": "Python"
+      },
+      "pullRequests": {
+        "pageInfo": {
+          "endCursor": null,
+          "hasNextPage": false
+        },
+        "nodes": []
+      }
+    }
+  }
+}
