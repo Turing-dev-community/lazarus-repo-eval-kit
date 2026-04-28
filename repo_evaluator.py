@@ -68,8 +68,16 @@ from eval_kit.constants import (
     OPEN_SOURCE_KEYWORDS,
     REPO_HEALTH_THRESHOLDS,
 )
+from eval_kit.enterprise_signals import (
+    PRContext,
+    RepoContext,
+    collect_for_pr,
+    collect_for_repo,
+    get_pr_collectors,
+    get_repo_collectors,
+    register_pr_collector,
+)
 from eval_kit.llm_client import API_KEY_ENV_VARS
-from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 from eval_kit.platform_clients import (
     BitbucketClient,
     GitHubClient,
@@ -98,16 +106,9 @@ from eval_kit.repo_evaluator_helpers import (
     load_language_config,
     normalize_to_utc,
 )
-from eval_kit.enterprise_signals import (
-    PRContext,
-    RepoContext,
-    collect_for_pr,
-    collect_for_repo,
-    get_pr_collectors,
-    get_repo_collectors,
-)
 from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
 from eval_kit.test_runners import F2PP2PAnalyzer, get_runner, preflight_check
+from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 
 if not os.environ.get("REPO_EVAL_SKIP_DOTENV"):
     load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
@@ -2315,6 +2316,9 @@ class PRAnalyzer:
         prs_with_issue_links = 0
         pr_created_datetimes = []
 
+        _pr_collectors = get_pr_collectors()
+        _needs_diff = any(getattr(c, "requires_diff", False) for c in _pr_collectors)
+
         while True:
             try:
                 res = self.platform_client.fetch_prs(
@@ -2581,6 +2585,7 @@ class PRAnalyzer:
                                 failed_filter = "full_patch_retrieval"
                                 filter_reason = "Could not retrieve full patch"
                             else:
+                                pr_data["__full_patch"] = full_patch
                                 # Rust embedded tests check
                                 if language_name == "Rust" and has_rust_embedded_tests(
                                     pr_files_nodes, full_patch, self.language_config
@@ -2615,12 +2620,7 @@ class PRAnalyzer:
                         )
                     else:
                         accepted += 1
-                        _pr_collectors = get_pr_collectors()
                         if _pr_collectors:
-                            _needs_diff = any(
-                                getattr(c, "requires_diff", False)
-                                for c in _pr_collectors
-                            )
                             _closing_issues = pr_data.get(
                                 "closingIssuesReferences", {}
                             ).get("nodes", [])
@@ -2649,13 +2649,16 @@ class PRAnalyzer:
                                 issue_body=(_valid_issue or {}).get("body"),
                                 commit_messages=_commit_messages,
                                 changed_files=[f["path"] for f in pr_files_nodes],
-                                diff=full_patch if _needs_diff else None,
+                                diff=pr_data.get("__full_patch")
+                                if _needs_diff
+                                else None,
                                 repo_path=self.repo_path,
                                 primary_language=language_name,
                             )
                             _signals = collect_for_pr(_pr_ctx, _pr_collectors)
                             if _signals:
                                 pr_data["enterprise_signals"] = _signals
+                        pr_data.pop("__full_patch", None)
                         accepted_prs.append(pr_data)
                         logger.info(f"PR #{pr_number} accepted")
 
@@ -3853,10 +3856,12 @@ def main():
 
     args = parser.parse_args()
 
+    _enterprise_has_llm = not args.skip_quality_llm
     needs_llm = (
         (not args.skip_quality_checks and not args.skip_quality_llm)
         or not args.skip_taxonomy
         or not args.skip_pr_rubrics
+        or _enterprise_has_llm
     )
     if needs_llm:
         provider = os.environ.get("LLM_PROVIDER", "openai").lower()
@@ -3870,6 +3875,10 @@ def main():
                 file=sys.stderr,
             )
             sys.exit(1)
+
+    from eval_kit.enterprise_signals.collectors.incident import IncidentSignalCollector
+
+    register_pr_collector(IncidentSignalCollector(skip_llm=args.skip_quality_llm))
 
     if args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d").replace(

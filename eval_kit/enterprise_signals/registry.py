@@ -30,3 +30,9 @@ def get_pr_collectors() -> List[PRCollector]:
 
 def get_repo_collectors() -> List[RepoCollector]:
     return list(_REPO_COLLECTORS)
+
+
+def reset_collectors() -> None:
+    """Clear all registered collectors. Intended for test isolation only."""
+    _PR_COLLECTORS.clear()
+    _REPO_COLLECTORS.clear()

@@ -1,19 +1,30 @@
 from eval_kit.enterprise_signals.base import (
+    LLMCollector,
     PRCollector,
     PRContext,
     RepoCollector,
     RepoContext,
 )
 from eval_kit.enterprise_signals.framework import collect_for_pr, collect_for_repo
-from eval_kit.enterprise_signals.registry import get_pr_collectors, get_repo_collectors
+from eval_kit.enterprise_signals.registry import (
+    get_pr_collectors,
+    get_repo_collectors,
+    register_pr_collector,
+    register_repo_collector,
+    reset_collectors,
+)
 
 __all__ = [
     "PRContext",
     "RepoContext",
     "PRCollector",
     "RepoCollector",
+    "LLMCollector",
     "collect_for_pr",
     "collect_for_repo",
     "get_pr_collectors",
     "get_repo_collectors",
+    "register_pr_collector",
+    "register_repo_collector",
+    "reset_collectors",
 ]

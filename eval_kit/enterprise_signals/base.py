@@ -46,3 +46,25 @@ class RepoCollector:
 
     def collect(self, repo: RepoContext) -> Dict[str, Any]:
         raise NotImplementedError
+
+
+class LLMCollector(PRCollector):
+    """Base class for LLM-backed PR collectors.
+
+    Subclasses override ``name``, ``requires_diff``, and ``_run()``.
+    When ``skip_llm=True`` the collector short-circuits and returns
+    ``{"skipped": True}`` without touching the LLM.
+    """
+
+    requires_diff = False
+
+    def __init__(self, skip_llm: bool = False) -> None:
+        self._skip_llm = skip_llm
+
+    def collect(self, pr: PRContext) -> Dict[str, Any]:
+        if self._skip_llm:
+            return {"skipped": True}
+        return self._run(pr)
+
+    def _run(self, pr: PRContext) -> Dict[str, Any]:
+        raise NotImplementedError
