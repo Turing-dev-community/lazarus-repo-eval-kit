@@ -60,6 +60,12 @@
             "files": {
               "nodes": [
                 {
+                  "path": "tests/test_modules.py",
+                  "additions": 5,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
                   "path": "src/module_0.py",
                   "additions": 5,
                   "deletions": 3,

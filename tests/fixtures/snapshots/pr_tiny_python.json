@@ -72,7 +72,7 @@
       "url": "https://github.com/fake/repo/pull/3"
     }
   ],
-  "avg_loc_per_pr": 160.67,
+  "avg_loc_per_pr": 162.33,
   "f2p_results": null,
   "f2p_skipped_reason": null,
   "fairness_eval": null,
@@ -157,7 +157,7 @@
       "count": 1,
       "percentage": 50.0
     },
-    "no_new_files": {
+    "low_feature_score": {
       "count": 1,
       "percentage": 50.0
     }
@@ -181,7 +181,7 @@
       "count": 1,
       "percentage": 50.0
     },
-    "fewer_than_min_test_files": {
+    "too_many_changed_files": {
       "count": 1,
       "percentage": 50.0
     }

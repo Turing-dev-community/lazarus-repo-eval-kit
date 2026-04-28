@@ -399,7 +399,9 @@ def _write_tiny_python_cassette(shas: dict[str, str]) -> None:
         files=[_file_node("requirements.txt", 2, 2)],
     )
 
-    # PR #2: too many changed files — rejected at too_many_changed_files
+    # PR #2: too many changed files — rejected at too_many_changed_files.
+    # Includes 1 test file so it clears the earlier fewer_than_min_test_files gate
+    # (MIN_TEST_FILES=1), then 55 source files push code_files to 56 > MAX_CHANGED_FILES=50.
     pr_too_many_files = _pr_node(
         number=2,
         title="refactor: rename all variables",
@@ -411,8 +413,15 @@ def _write_tiny_python_cassette(shas: dict[str, str]) -> None:
         created_at="2024-01-15T10:00:00Z",
         merged_at="2024-01-15T12:00:00Z",
         files=[
+            _file_node(
+                "tests/test_modules.py", 5, 0, "ADDED"
+            ),  # clears MIN_TEST_FILES gate
+        ]
+        + [
             _file_node(f"src/module_{i}.py", 5, 3)
-            for i in range(55)  # 55 non-test files > MAX_CHANGED_FILES=50
+            for i in range(
+                55
+            )  # 1 test + 55 source = 56 code files > MAX_CHANGED_FILES=50
         ],
     )
 
