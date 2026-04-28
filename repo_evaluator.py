@@ -98,6 +98,14 @@ from eval_kit.repo_evaluator_helpers import (
     load_language_config,
     normalize_to_utc,
 )
+from eval_kit.enterprise_signals import (
+    PRContext,
+    RepoContext,
+    collect_for_pr,
+    collect_for_repo,
+    get_pr_collectors,
+    get_repo_collectors,
+)
 from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
 from eval_kit.test_runners import F2PP2PAnalyzer, get_runner, preflight_check
 
@@ -673,6 +681,7 @@ class RepoMetrics:
     readme_has_usage: Optional[bool] = None
     process_health_checks: Dict[str, Any] = None
     process_health_summary: Dict[str, Any] = None
+    enterprise_signals: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -2606,6 +2615,47 @@ class PRAnalyzer:
                         )
                     else:
                         accepted += 1
+                        _pr_collectors = get_pr_collectors()
+                        if _pr_collectors:
+                            _needs_diff = any(
+                                getattr(c, "requires_diff", False)
+                                for c in _pr_collectors
+                            )
+                            _closing_issues = pr_data.get(
+                                "closingIssuesReferences", {}
+                            ).get("nodes", [])
+                            _valid_issue = next(
+                                (
+                                    i
+                                    for i in _closing_issues
+                                    if i.get("__typename") != "PullRequest"
+                                    and i.get("state", "").lower() == "closed"
+                                ),
+                                None,
+                            )
+                            _commit_nodes = (
+                                pr_data.get("commits", {}).get("nodes", []) or []
+                            )
+                            _commit_messages = [
+                                (n.get("commit") or {}).get("message", "")
+                                for n in _commit_nodes
+                                if (n.get("commit") or {}).get("message")
+                            ]
+                            _pr_ctx = PRContext(
+                                number=pr_data["number"],
+                                title=pr_data.get("title", "") or "",
+                                body=pr_data.get("body", "") or "",
+                                issue_title=(_valid_issue or {}).get("title"),
+                                issue_body=(_valid_issue or {}).get("body"),
+                                commit_messages=_commit_messages,
+                                changed_files=[f["path"] for f in pr_files_nodes],
+                                diff=full_patch if _needs_diff else None,
+                                repo_path=self.repo_path,
+                                primary_language=language_name,
+                            )
+                            _signals = collect_for_pr(_pr_ctx, _pr_collectors)
+                            if _signals:
+                                pr_data["enterprise_signals"] = _signals
                         accepted_prs.append(pr_data)
                         logger.info(f"PR #{pr_number} accepted")
 
@@ -2775,6 +2825,18 @@ class RepoEvaluator:
             platform_client=self.platform_client,
         )
         repo_metrics = repo_analyzer.analyze()
+
+        _repo_collectors = get_repo_collectors()
+        if _repo_collectors:
+            _repo_ctx = RepoContext(
+                repo_path=Path(self.repo_path),
+                owner=self.owner,
+                repo_name=self.repo_name,
+                primary_language=repo_metrics.primary_language,
+            )
+            _repo_signals = collect_for_repo(_repo_ctx, _repo_collectors)
+            if _repo_signals:
+                repo_metrics.enterprise_signals = _repo_signals
 
         primary_language = repo_metrics.primary_language
         if primary_language in ["Vue", "React"]:
@@ -3433,6 +3495,8 @@ def to_json(report: AnalysisReport) -> dict:
         }
         if "f2p_result" in pr:
             pr_data["f2p_result"] = pr["f2p_result"]
+        if pr.get("enterprise_signals"):
+            pr_data["enterprise_signals"] = pr["enterprise_signals"]
         accepted_prs_clean.append(pr_data)
 
     repo_metrics_json = asdict(report.repo_metrics)
@@ -3506,6 +3570,8 @@ def to_json(report: AnalysisReport) -> dict:
         "ai_risk_level": repo_metrics_json.get("ai_risk_level"),
         "ai_risk_signals": repo_metrics_json.get("ai_risk_signals"),
     }
+    if report.repo_metrics.enterprise_signals:
+        repo_metrics_out["enterprise_signals"] = report.repo_metrics.enterprise_signals
 
     result = {
         "repo_name": report.repo_name,
@@ -3634,7 +3700,7 @@ def clone_repo(
         ["git", "clone", repo_url, str(clone_path)],
         capture_output=True,
         text=True,
-        timeout=300,
+        timeout=900,
     )
 
     if result.returncode != 0:
