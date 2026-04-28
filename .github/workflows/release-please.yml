@@ -19,3 +19,4 @@ jobs:
           token: ${{ secrets.MY_RELEASE_PLEASE_TOKEN }}
           release-type: simple
           skip-github-pull-request: false
+          changelog-notes-type: github

@@ -6,11 +6,8 @@
 ### Features
 
 * Add fairness evaluator for F2P tests ([8f37e44](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/8f37e4400e2ab7a19839214db9d1a2a26b285916))
-* Add fairness evaluator for F2P tests ([f0e31c7](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/f0e31c7de604b16951e6e2df089a625b17d9235f))
 * Add LLM cost tracking and warnings ([9948589](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/9948589ada85217dd9bf849dabff340bb0cab53d))
-* Add LLM cost tracking and warnings ([00cd046](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/00cd046281716aae9de59f15dd66a423eda91120))
 * Update JVM runtime checks and document prerequisites ([ecad57e](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/ecad57e983e7435ad8deaa71d9fbeaa3ae8350e6))
-* Update JVM runtime checks and document prerequisites ([ffbafc9](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/ffbafc93aa00ec82d91ede011f3351707552deb6))
 
 
 ### Bug Fixes
