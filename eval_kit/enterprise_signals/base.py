@@ -19,6 +19,8 @@ class PRContext:
     diff: Optional[str]
     repo_path: Path
     primary_language: Optional[str]
+    owner: Optional[str] = None
+    repo_name: Optional[str] = None
 
 
 @dataclass(frozen=True)

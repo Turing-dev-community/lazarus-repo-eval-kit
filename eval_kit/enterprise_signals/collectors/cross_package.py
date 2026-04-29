@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomli
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
@@ -49,14 +50,7 @@ def _detect_package_prefix_from_cargo(repo_path: Path) -> Optional[List[str]]:
     if not cargo.exists():
         return None
     try:
-        import tomllib
-    except ImportError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ImportError:
-            return None
-    try:
-        data = tomllib.loads(cargo.read_text())
+        data = tomli.loads(cargo.read_text())
         members = data.get("workspace", {}).get("members", [])
         return members or None
     except Exception:

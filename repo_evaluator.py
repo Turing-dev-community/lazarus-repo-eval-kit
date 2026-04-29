@@ -3704,9 +3704,10 @@ def clone_repo(
     clone_path = temp_dir / repo_full_name.replace("/", "_")
 
     logger.info(f"Cloning {repo_full_name} to {clone_path}...")
+    increment = 50
     result = subprocess.run(
         # deep clone so we can get the total commits
-        ["git", "clone", repo_url, str(clone_path)],
+        ["git", "clone", repo_url, str(clone_path), "--depth", f"{increment}"],
         capture_output=True,
         text=True,
         timeout=900,
@@ -3714,6 +3715,37 @@ def clone_repo(
 
     if result.returncode != 0:
         raise RuntimeError(f"Failed to clone repository: {result.stderr}")
+
+    def is_shallow(path):
+        """Checks if the repository is still shallow."""
+        result = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=path,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip() == "true"
+
+    # The Unshallow Loop
+    while is_shallow(clone_path):
+        print(f"Deepening history by {increment} commits...")
+
+        result = subprocess.run(
+            ["git", "fetch", f"--deepen={increment}"],
+            cwd=clone_path,
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+
+        if result.returncode != 0:
+            print(f"Fetch failed or reached the end of history: {result.stderr}")
+            # Sometimes --deepen fails if you hit the very beginning of the repo.
+            # We try a final --unshallow to clean up.
+            subprocess.run(["git", "fetch", "--unshallow"], cwd=clone_path)
+            break
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to fetch repository history: {result.stderr}")
 
     logger.info("Successfully cloned repository")
     return clone_path
@@ -3882,52 +3914,52 @@ def main():
             )
             sys.exit(1)
 
-    from eval_kit.enterprise_signals.collectors.incident import IncidentSignalCollector
-    from eval_kit.enterprise_signals.collectors.enterprise_domain import (
-        EnterpriseDomainCollector,
-    )
-    from eval_kit.enterprise_signals.collectors.external_connection import (
-        ExternalConnectionCollector,
-    )
-    from eval_kit.enterprise_signals.collectors.db_migration import DbMigrationCollector
-    from eval_kit.enterprise_signals.collectors.multi_tenancy import (
-        MultiTenancyCollector,
-    )
     from eval_kit.enterprise_signals.collectors.adjacent_artifacts import (
         AdjacentArtifactsCollector,
-    )
-    from eval_kit.enterprise_signals.collectors.cross_package import (
-        CrossPackageCollector,
-    )
-    from eval_kit.enterprise_signals.collectors.environment_sensitivity import (
-        EnvironmentSensitivityCollector,
     )
     from eval_kit.enterprise_signals.collectors.broken_evaluator_risk import (
         BrokenEvaluatorRiskCollector,
     )
-    from eval_kit.enterprise_signals.collectors.hardware_env_gaps import (
-        HardwareEnvGapsCollector,
+    from eval_kit.enterprise_signals.collectors.cicd_guardrails import (
+        CicdGuardrailsCollector,
     )
-    from eval_kit.enterprise_signals.collectors.vendor_integration import (
-        VendorIntegrationCollector,
+    from eval_kit.enterprise_signals.collectors.cross_package import (
+        CrossPackageCollector,
     )
-    from eval_kit.enterprise_signals.collectors.pr_description_quality import (
-        PrDescriptionQualityCollector,
+    from eval_kit.enterprise_signals.collectors.db_migration import DbMigrationCollector
+    from eval_kit.enterprise_signals.collectors.dependency_list import (
+        DependencyListCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.enterprise_data_handling import (
+        EnterpriseDataHandlingCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.enterprise_domain import (
+        EnterpriseDomainCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.environment_sensitivity import (
+        EnvironmentSensitivityCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.external_connection import (
+        ExternalConnectionCollector,
     )
     from eval_kit.enterprise_signals.collectors.feature_flags import (
         FeatureFlagsCollector,
     )
+    from eval_kit.enterprise_signals.collectors.hardware_env_gaps import (
+        HardwareEnvGapsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.incident import IncidentSignalCollector
+    from eval_kit.enterprise_signals.collectors.multi_tenancy import (
+        MultiTenancyCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.pr_description_quality import (
+        PrDescriptionQualityCollector,
+    )
     from eval_kit.enterprise_signals.collectors.resiliency_patterns import (
         ResiliencyPatternsCollector,
     )
-    from eval_kit.enterprise_signals.collectors.dependency_list import (
-        DependencyListCollector,
-    )
-    from eval_kit.enterprise_signals.collectors.cicd_guardrails import (
-        CicdGuardrailsCollector,
-    )
-    from eval_kit.enterprise_signals.collectors.enterprise_data_handling import (
-        EnterpriseDataHandlingCollector,
+    from eval_kit.enterprise_signals.collectors.vendor_integration import (
+        VendorIntegrationCollector,
     )
 
     register_pr_collector(IncidentSignalCollector(skip_llm=args.skip_quality_llm))

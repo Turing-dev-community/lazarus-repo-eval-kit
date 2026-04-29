@@ -25,6 +25,8 @@ def _make_pr_ctx(**kwargs) -> PRContext:
         diff=None,
         repo_path=Path("/tmp/repo"),
         primary_language="Python",
+        owner="myorg",
+        repo_name="myrepo",
     )
     defaults.update(kwargs)
     return PRContext(**defaults)
@@ -82,6 +84,81 @@ def test_issue_body_also_scanned():
         _make_pr_ctx(
             body="No links here",
             issue_body="See https://mycompany.atlassian.net/browse/PROJ-99 for context",
+        )
+    )
+    assert result["has_external_artifacts"] is True
+
+
+def test_github_issue_same_repo_ignored():
+    # A link to an issue in the PR's own repo is routine workflow — not an artifact.
+    result = AdjacentArtifactsCollector().collect(
+        _make_pr_ctx(
+            owner="myorg",
+            repo_name="myrepo",
+            body="Fixes https://github.com/myorg/myrepo/issues/42",
+        )
+    )
+    assert result["has_external_artifacts"] is False
+    assert result["links"] == []
+
+
+def test_github_issue_cross_repo_detected():
+    # A link to an issue in a *different* repo signals cross-team coordination.
+    result = AdjacentArtifactsCollector().collect(
+        _make_pr_ctx(
+            owner="myorg",
+            repo_name="myrepo",
+            body="Tracked in https://github.com/otherorg/otherrepo/issues/7",
+        )
+    )
+    assert result["has_external_artifacts"] is True
+    assert any(link["type"] == "github_issue" for link in result["links"])
+
+
+def test_github_pr_same_repo_ignored():
+    result = AdjacentArtifactsCollector().collect(
+        _make_pr_ctx(
+            owner="myorg",
+            repo_name="myrepo",
+            body="Blocked by https://github.com/myorg/myrepo/pull/100",
+        )
+    )
+    assert result["has_external_artifacts"] is False
+    assert result["links"] == []
+
+
+def test_github_pr_cross_repo_detected():
+    result = AdjacentArtifactsCollector().collect(
+        _make_pr_ctx(
+            owner="myorg",
+            repo_name="myrepo",
+            body="Depends on https://github.com/otherorg/sharedlib/pull/55",
+        )
+    )
+    assert result["has_external_artifacts"] is True
+    assert any(link["type"] == "github_pr" for link in result["links"])
+
+
+def test_github_same_repo_case_insensitive():
+    # Owner/repo comparison must be case-insensitive.
+    result = AdjacentArtifactsCollector().collect(
+        _make_pr_ctx(
+            owner="MyOrg",
+            repo_name="MyRepo",
+            body="Fixes https://github.com/myorg/myrepo/issues/1",
+        )
+    )
+    assert result["has_external_artifacts"] is False
+
+
+def test_github_link_without_owner_context_included():
+    # When owner/repo_name are unknown (None), GitHub links are kept rather
+    # than silently dropped, erring on the side of recall.
+    result = AdjacentArtifactsCollector().collect(
+        _make_pr_ctx(
+            owner=None,
+            repo_name=None,
+            body="See https://github.com/someorg/somerepo/issues/3",
         )
     )
     assert result["has_external_artifacts"] is True

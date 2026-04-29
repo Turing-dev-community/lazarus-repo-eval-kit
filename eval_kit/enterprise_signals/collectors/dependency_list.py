@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import tomli
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -67,14 +68,7 @@ def _parse_requirements_txt(path: Path) -> List[Dict[str, Any]]:
 
 def _parse_pyproject_toml(path: Path) -> List[Dict[str, Any]]:
     try:
-        import tomllib  # Python 3.11+
-    except ImportError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ImportError:
-            return []
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = tomli.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return []
     deps: List[Dict[str, Any]] = []
@@ -117,14 +111,7 @@ def _parse_pyproject_toml(path: Path) -> List[Dict[str, Any]]:
 
 def _parse_cargo_toml(path: Path) -> List[Dict[str, Any]]:
     try:
-        import tomllib
-    except ImportError:
-        try:
-            import tomli as tomllib  # type: ignore[no-redef]
-        except ImportError:
-            return []
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
+        data = tomli.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return []
     deps = []

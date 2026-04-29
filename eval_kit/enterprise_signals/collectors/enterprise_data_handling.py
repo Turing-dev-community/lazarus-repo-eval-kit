@@ -6,12 +6,15 @@ Per CSV column E, this is repo-level only.
 
 from __future__ import annotations
 
+import logging
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
 from eval_kit.enterprise_signals.base import RepoCollector, RepoContext
+
+logger = logging.getLogger(__name__)
 
 # (framework_label, import_pattern_regex)
 _FRAMEWORK_PATTERNS: List[tuple] = [
@@ -66,13 +69,14 @@ _MAX_BYTES_PER_FILE = 64_000
 def _scan_repo(root: Path) -> List[str]:
     detected: List[str] = []
     seen_labels: set = set()
-    files_scanned = 0
+    files_visited = 0
 
     for path in root.rglob("*"):
-        if files_scanned >= _MAX_FILES_TO_SCAN:
-            break
         if not path.is_file():
             continue
+        files_visited += 1
+        if files_visited > _MAX_FILES_TO_SCAN:
+            break
         if path.suffix not in _SOURCE_EXTENSIONS:
             # Also check manifest file names by name
             name = path.name
@@ -87,7 +91,6 @@ def _scan_repo(root: Path) -> List[str]:
             )
         except Exception:
             continue
-        files_scanned += 1
         for label, pat in _FRAMEWORK_PATTERNS:
             if label not in seen_labels and pat.search(content):
                 seen_labels.add(label)
@@ -139,8 +142,8 @@ def _llm_fallback(repo: RepoContext) -> Optional[str]:
         )
         if result.has_enterprise_data_handling:
             return result.evidence
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("enterprise_data_handling LLM fallback failed: %s", exc)
     return None
 
 
