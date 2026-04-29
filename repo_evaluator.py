@@ -3880,9 +3880,72 @@ def main():
     from eval_kit.enterprise_signals.collectors.enterprise_domain import (
         EnterpriseDomainCollector,
     )
+    from eval_kit.enterprise_signals.collectors.external_connection import (
+        ExternalConnectionCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.db_migration import DbMigrationCollector
+    from eval_kit.enterprise_signals.collectors.multi_tenancy import (
+        MultiTenancyCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.adjacent_artifacts import (
+        AdjacentArtifactsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.cross_package import (
+        CrossPackageCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.environment_sensitivity import (
+        EnvironmentSensitivityCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.broken_evaluator_risk import (
+        BrokenEvaluatorRiskCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.hardware_env_gaps import (
+        HardwareEnvGapsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.vendor_integration import (
+        VendorIntegrationCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.pr_description_quality import (
+        PrDescriptionQualityCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.feature_flags import (
+        FeatureFlagsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.resiliency_patterns import (
+        ResiliencyPatternsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.dependency_list import (
+        DependencyListCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.cicd_guardrails import (
+        CicdGuardrailsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.enterprise_data_handling import (
+        EnterpriseDataHandlingCollector,
+    )
 
     register_pr_collector(IncidentSignalCollector(skip_llm=args.skip_quality_llm))
     register_pr_collector(EnterpriseDomainCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(ExternalConnectionCollector())
+    register_pr_collector(DbMigrationCollector())
+    register_pr_collector(MultiTenancyCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(AdjacentArtifactsCollector())
+    register_pr_collector(CrossPackageCollector())
+    register_pr_collector(EnvironmentSensitivityCollector())
+    register_pr_collector(BrokenEvaluatorRiskCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(HardwareEnvGapsCollector())
+    register_pr_collector(VendorIntegrationCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(PrDescriptionQualityCollector())
+    register_pr_collector(FeatureFlagsCollector())
+    register_pr_collector(ResiliencyPatternsCollector())
+
+    from eval_kit.enterprise_signals.registry import register_repo_collector
+
+    register_repo_collector(DependencyListCollector())
+    register_repo_collector(CicdGuardrailsCollector())
+    register_repo_collector(
+        EnterpriseDataHandlingCollector(skip_llm=args.skip_quality_llm)
+    )
 
     if args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d").replace(
