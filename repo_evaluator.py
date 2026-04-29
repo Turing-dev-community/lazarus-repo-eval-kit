@@ -3488,6 +3488,7 @@ def print_report(report: AnalysisReport):
 def to_json(report: AnalysisReport) -> dict:
     """Convert report to JSON-serializable dict."""
     accepted_prs_clean = []
+    pr_enterprise_signals: list = []
     for pr in report.pr_analysis.accepted_prs:
         pr_data = {
             "number": pr.get("number"),
@@ -3500,6 +3501,9 @@ def to_json(report: AnalysisReport) -> dict:
             pr_data["f2p_result"] = pr["f2p_result"]
         if pr.get("enterprise_signals"):
             pr_data["enterprise_signals"] = pr["enterprise_signals"]
+            pr_enterprise_signals.append(
+                {"pr_number": pr.get("number"), **pr["enterprise_signals"]}
+            )
         accepted_prs_clean.append(pr_data)
 
     repo_metrics_json = asdict(report.repo_metrics)
@@ -3608,6 +3612,9 @@ def to_json(report: AnalysisReport) -> dict:
     # repo_metrics_out['commit_spread_days'] = repo_metrics_json.get('commit_spread_days')
     # repo_metrics_out['process_health_checks'] = repo_metrics_json.get('process_health_checks')
     # repo_metrics_out['process_health_summary'] = repo_metrics_json.get('process_health_summary')
+
+    if pr_enterprise_signals:
+        result["pr_enterprise_signals"] = pr_enterprise_signals
 
     if report.pr_analysis.f2p_results:
         result["pr_analysis"]["f2p_results"] = report.pr_analysis.f2p_results
