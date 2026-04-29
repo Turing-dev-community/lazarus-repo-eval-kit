@@ -3500,7 +3500,6 @@ def to_json(report: AnalysisReport) -> dict:
         if "f2p_result" in pr:
             pr_data["f2p_result"] = pr["f2p_result"]
         if pr.get("enterprise_signals"):
-            pr_data["enterprise_signals"] = pr["enterprise_signals"]
             pr_enterprise_signals.append(
                 {"pr_number": pr.get("number"), **pr["enterprise_signals"]}
             )
