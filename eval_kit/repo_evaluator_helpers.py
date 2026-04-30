@@ -805,7 +805,8 @@ def clone_repo(
     """Clone repository to a subdirectory of temp_dir.
 
     Pass depth to perform a shallow clone (e.g. depth=200 for agent checks).
-    Omit or pass None for a full clone (needed for accurate commit history).
+    Omit or pass None for a full clone via progressive deepening (needed for
+    accurate commit history).
     """
     if platform == "bitbucket":
         repo_url = f"https://x-token-auth:{token}@bitbucket.org/{repo_full_name}.git"
@@ -816,17 +817,60 @@ def clone_repo(
 
     clone_path = temp_dir / repo_full_name.replace("/", "_")
 
-    cmd = ["git", "clone"]
     if depth is not None:
-        cmd += ["--depth", str(depth)]
-    cmd += [repo_url, str(clone_path)]
+        # Shallow clone at the requested depth (e.g. for agent file inspection)
+        cmd = ["git", "clone", "--depth", str(depth), repo_url, str(clone_path)]
+        logger.info("Cloning %s to %s (depth=%s)...", repo_full_name, clone_path, depth)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        if result.returncode != 0:
+            safe_stderr = (
+                result.stderr.replace(token, "***") if token else result.stderr
+            )
+            raise RuntimeError(f"Failed to clone repository: {safe_stderr}")
+    else:
+        # Full clone via progressive deepening for accurate commit history
+        increment = 50
+        logger.info("Cloning %s to %s...", repo_full_name, clone_path)
+        result = subprocess.run(
+            ["git", "clone", repo_url, str(clone_path), "--depth", f"{increment}"],
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+        if result.returncode != 0:
+            safe_stderr = (
+                result.stderr.replace(token, "***") if token else result.stderr
+            )
+            raise RuntimeError(f"Failed to clone repository: {safe_stderr}")
 
-    logger.info("Cloning %s to %s...", repo_full_name, clone_path)
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        def is_shallow(path: Path) -> bool:
+            r = subprocess.run(
+                ["git", "rev-parse", "--is-shallow-repository"],
+                cwd=path,
+                capture_output=True,
+                text=True,
+            )
+            return r.stdout.strip() == "true"
 
-    if result.returncode != 0:
-        safe_stderr = result.stderr.replace(token, "***") if token else result.stderr
-        raise RuntimeError(f"Failed to clone repository: {safe_stderr}")
+        while is_shallow(clone_path):
+            logger.info("Deepening history by %s commits...", increment)
+            result = subprocess.run(
+                ["git", "fetch", f"--deepen={increment}"],
+                cwd=clone_path,
+                capture_output=True,
+                text=True,
+                timeout=900,
+            )
+            if result.returncode != 0:
+                logger.warning(
+                    "Fetch failed or reached end of history: %s", result.stderr
+                )
+                # Hit the beginning of the repo — clean up with --unshallow
+                subprocess.run(["git", "fetch", "--unshallow"], cwd=clone_path)
+                break
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to fetch repository history: {result.stderr}")
 
     logger.info("Successfully cloned repository")
     return clone_path

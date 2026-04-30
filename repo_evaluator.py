@@ -3870,6 +3870,12 @@ def main():
                     "security_check_signals": "",
                     "production_quality_critical": "",
                     "production_quality_signals": "",
+                    "static_vibe_coding_critical": "",
+                    "static_vibe_coding_signals": "",
+                    "static_security_check_critical": "",
+                    "static_security_check_signals": "",
+                    "static_production_quality_critical": "",
+                    "static_production_quality_signals": "",
                 }
             )
 
