@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.3.0...v0.4.0) (2026-04-30)
+
+
+### Features
+
+* Replace static checks with pydantic-ai agents ([77c1f63](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/77c1f637aa5237edd21a514549eba004aa149c20))
+
+
+### Bug Fixes
+
+* Return production, security, and vibe static checks ([b475b59](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/b475b5933b2a0b7d240194cee2b5055da39ca458))
+
 ## [0.3.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.2.0...v0.3.0) (2026-04-30)
 
 
