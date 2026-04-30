@@ -1,0 +1,480 @@
+{
+  "data": {
+    "repository": {
+      "primaryLanguage": {
+        "name": "Python"
+      },
+      "pullRequests": {
+        "pageInfo": {
+          "endCursor": null,
+          "hasNextPage": false
+        },
+        "nodes": [
+          {
+            "number": 1,
+            "title": "chore: automated dependency update",
+            "body": "Automated bump of dependencies.",
+            "url": "https://github.com/fake/repo/pull/1",
+            "baseRefOid": "0000000000000000000000000000000000000001",
+            "headRefOid": "0000000000000000000000000000000000000002",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-1",
+            "createdAt": "2024-01-10T10:00:00Z",
+            "mergedAt": "2024-01-10T11:00:00Z",
+            "author": {
+              "__typename": "Bot",
+              "login": "dependabot[bot]"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "requirements.txt",
+                  "additions": 2,
+                  "deletions": 2,
+                  "changeType": "MODIFIED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": []
+            },
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 2,
+            "title": "refactor: rename all variables",
+            "body": "Massive rename across the entire codebase.",
+            "url": "https://github.com/fake/repo/pull/2",
+            "baseRefOid": "0000000000000000000000000000000000000003",
+            "headRefOid": "0000000000000000000000000000000000000004",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-2",
+            "createdAt": "2024-01-15T10:00:00Z",
+            "mergedAt": "2024-01-15T12:00:00Z",
+            "author": {
+              "__typename": "User",
+              "login": "human-dev"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "tests/test_modules.py",
+                  "additions": 5,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/module_0.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_1.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_2.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_3.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_4.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_5.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_6.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_7.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_8.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_9.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_10.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_11.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_12.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_13.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_14.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_15.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_16.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_17.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_18.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_19.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_20.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_21.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_22.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_23.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_24.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_25.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_26.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_27.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_28.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_29.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_30.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_31.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_32.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_33.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_34.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_35.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_36.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_37.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_38.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_39.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_40.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_41.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_42.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_43.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_44.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_45.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_46.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_47.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_48.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_49.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_50.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_51.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_52.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_53.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/module_54.py",
+                  "additions": 5,
+                  "deletions": 3,
+                  "changeType": "MODIFIED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": []
+            },
+            "labels": {
+              "nodes": []
+            }
+          },
+          {
+            "number": 3,
+            "title": "feat: add helpers module",
+            "body": "Adds clamp, square, cube helpers and extends existing tests.",
+            "url": "https://github.com/fake/repo/pull/3",
+            "baseRefOid": "c4938b75163db29673af7fa546a7c3542bdf2477",
+            "headRefOid": "53f6fb0a619b46c714426c783290f1a19d48afb6",
+            "baseRefName": "main",
+            "headRefName": "feature/pr-3",
+            "createdAt": "2024-02-01T09:00:00Z",
+            "mergedAt": "2024-02-02T09:00:00Z",
+            "author": {
+              "__typename": "User",
+              "login": "alice"
+            },
+            "files": {
+              "nodes": [
+                {
+                  "path": "src/helpers.py",
+                  "additions": 8,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "src/main.py",
+                  "additions": 4,
+                  "deletions": 1,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "src/utils.py",
+                  "additions": 4,
+                  "deletions": 1,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "tests/test_helpers.py",
+                  "additions": 10,
+                  "deletions": 0,
+                  "changeType": "ADDED"
+                },
+                {
+                  "path": "tests/test_main.py",
+                  "additions": 4,
+                  "deletions": 1,
+                  "changeType": "MODIFIED"
+                },
+                {
+                  "path": "tests/test_utils.py",
+                  "additions": 4,
+                  "deletions": 1,
+                  "changeType": "MODIFIED"
+                }
+              ]
+            },
+            "closingIssuesReferences": {
+              "nodes": [
+                {
+                  "__typename": "Issue",
+                  "number": 42,
+                  "state": "CLOSED",
+                  "body": "We need a helpers module to provide shared utility functions like clamp, square and cube. These are used in both the main module and utils module but are currently duplicated. This PR adds the helpers module and updates the existing tests to use the new helpers."
+                }
+              ]
+            },
+            "labels": {
+              "nodes": []
+            }
+          }
+        ]
+      }
+    }
+  }
+}

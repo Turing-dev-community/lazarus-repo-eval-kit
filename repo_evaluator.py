@@ -68,8 +68,16 @@ from eval_kit.constants import (
     OPEN_SOURCE_KEYWORDS,
     REPO_HEALTH_THRESHOLDS,
 )
+from eval_kit.enterprise_signals import (
+    PRContext,
+    RepoContext,
+    collect_for_pr,
+    collect_for_repo,
+    get_pr_collectors,
+    get_repo_collectors,
+    register_pr_collector,
+)
 from eval_kit.llm_client import API_KEY_ENV_VARS
-from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 from eval_kit.platform_clients import (
     BitbucketClient,
     GitHubClient,
@@ -78,7 +86,11 @@ from eval_kit.platform_clients import (
     detect_platform,
 )
 from eval_kit.quality_checks import run_all_quality_checks
-from eval_kit.quality_evaluator import QualityEvaluator, split_patch_by_test_files
+from eval_kit.quality_evaluator import (
+    FairnessEvaluator,
+    QualityEvaluator,
+    split_patch_by_test_files,
+)
 from eval_kit.repo_evaluator_helpers import (
     MAX_ISSUE_WORDS,
     MIN_ISSUE_WORDS,
@@ -97,6 +109,7 @@ from eval_kit.repo_evaluator_helpers import (
 )
 from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
 from eval_kit.test_runners import F2PP2PAnalyzer, get_runner, preflight_check
+from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 
 if not os.environ.get("REPO_EVAL_SKIP_DOTENV"):
     load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
@@ -670,6 +683,7 @@ class RepoMetrics:
     readme_has_usage: Optional[bool] = None
     process_health_checks: Dict[str, Any] = None
     process_health_summary: Dict[str, Any] = None
+    enterprise_signals: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -690,6 +704,7 @@ class PRRejectionStats:
     avg_loc_per_pr: float = 0.0
     issue_linked_pr_ratio: float = 0.0
     pr_rubrics: Optional[List[dict]] = None
+    fairness_eval: Optional[List[dict]] = None
     pr_first_date: Optional[str] = None
     pr_last_date: Optional[str] = None
     pr_spread_days: Optional[int] = None
@@ -2302,6 +2317,9 @@ class PRAnalyzer:
         prs_with_issue_links = 0
         pr_created_datetimes = []
 
+        _pr_collectors = get_pr_collectors()
+        _needs_diff = any(getattr(c, "requires_diff", False) for c in _pr_collectors)
+
         while True:
             try:
                 res = self.platform_client.fetch_prs(
@@ -2568,6 +2586,7 @@ class PRAnalyzer:
                                 failed_filter = "full_patch_retrieval"
                                 filter_reason = "Could not retrieve full patch"
                             else:
+                                pr_data["__full_patch"] = full_patch
                                 # Rust embedded tests check
                                 if language_name == "Rust" and has_rust_embedded_tests(
                                     pr_files_nodes, full_patch, self.language_config
@@ -2602,6 +2621,45 @@ class PRAnalyzer:
                         )
                     else:
                         accepted += 1
+                        if _pr_collectors:
+                            _closing_issues = pr_data.get(
+                                "closingIssuesReferences", {}
+                            ).get("nodes", [])
+                            _valid_issue = next(
+                                (
+                                    i
+                                    for i in _closing_issues
+                                    if i.get("__typename") != "PullRequest"
+                                    and i.get("state", "").lower() == "closed"
+                                ),
+                                None,
+                            )
+                            _commit_nodes = (
+                                pr_data.get("commits", {}).get("nodes", []) or []
+                            )
+                            _commit_messages = [
+                                (n.get("commit") or {}).get("message", "")
+                                for n in _commit_nodes
+                                if (n.get("commit") or {}).get("message")
+                            ]
+                            _pr_ctx = PRContext(
+                                number=pr_data["number"],
+                                title=pr_data.get("title", "") or "",
+                                body=pr_data.get("body", "") or "",
+                                issue_title=(_valid_issue or {}).get("title"),
+                                issue_body=(_valid_issue or {}).get("body"),
+                                commit_messages=_commit_messages,
+                                changed_files=[f["path"] for f in pr_files_nodes],
+                                diff=pr_data.get("__full_patch")
+                                if _needs_diff
+                                else None,
+                                repo_path=self.repo_path,
+                                primary_language=language_name,
+                            )
+                            _signals = collect_for_pr(_pr_ctx, _pr_collectors)
+                            if _signals:
+                                pr_data["enterprise_signals"] = _signals
+                        pr_data.pop("__full_patch", None)
                         accepted_prs.append(pr_data)
                         logger.info(f"PR #{pr_number} accepted")
 
@@ -2771,6 +2829,18 @@ class RepoEvaluator:
             platform_client=self.platform_client,
         )
         repo_metrics = repo_analyzer.analyze()
+
+        _repo_collectors = get_repo_collectors()
+        if _repo_collectors:
+            _repo_ctx = RepoContext(
+                repo_path=Path(self.repo_path),
+                owner=self.owner,
+                repo_name=self.repo_name,
+                primary_language=repo_metrics.primary_language,
+            )
+            _repo_signals = collect_for_repo(_repo_ctx, _repo_collectors)
+            if _repo_signals:
+                repo_metrics.enterprise_signals = _repo_signals
 
         primary_language = repo_metrics.primary_language
         if primary_language in ["Vue", "React"]:
@@ -3419,6 +3489,7 @@ def print_report(report: AnalysisReport):
 def to_json(report: AnalysisReport) -> dict:
     """Convert report to JSON-serializable dict."""
     accepted_prs_clean = []
+    pr_enterprise_signals: list = []
     for pr in report.pr_analysis.accepted_prs:
         pr_data = {
             "number": pr.get("number"),
@@ -3429,6 +3500,10 @@ def to_json(report: AnalysisReport) -> dict:
         }
         if "f2p_result" in pr:
             pr_data["f2p_result"] = pr["f2p_result"]
+        if pr.get("enterprise_signals"):
+            pr_enterprise_signals.append(
+                {"pr_number": pr.get("number"), **pr["enterprise_signals"]}
+            )
         accepted_prs_clean.append(pr_data)
 
     repo_metrics_json = asdict(report.repo_metrics)
@@ -3502,6 +3577,8 @@ def to_json(report: AnalysisReport) -> dict:
         "ai_risk_level": repo_metrics_json.get("ai_risk_level"),
         "ai_risk_signals": repo_metrics_json.get("ai_risk_signals"),
     }
+    if report.repo_metrics.enterprise_signals:
+        repo_metrics_out["enterprise_signals"] = report.repo_metrics.enterprise_signals
 
     result = {
         "repo_name": report.repo_name,
@@ -3535,6 +3612,9 @@ def to_json(report: AnalysisReport) -> dict:
     # repo_metrics_out['commit_spread_days'] = repo_metrics_json.get('commit_spread_days')
     # repo_metrics_out['process_health_checks'] = repo_metrics_json.get('process_health_checks')
     # repo_metrics_out['process_health_summary'] = repo_metrics_json.get('process_health_summary')
+
+    if pr_enterprise_signals:
+        result["pr_enterprise_signals"] = pr_enterprise_signals
 
     if report.pr_analysis.f2p_results:
         result["pr_analysis"]["f2p_results"] = report.pr_analysis.f2p_results
@@ -3753,10 +3833,12 @@ def main():
 
     args = parser.parse_args()
 
+    _enterprise_has_llm = not args.skip_quality_llm
     needs_llm = (
         (not args.skip_quality_checks and not args.skip_quality_llm)
         or not args.skip_taxonomy
         or not args.skip_pr_rubrics
+        or _enterprise_has_llm
     )
     if needs_llm:
         provider = os.environ.get("LLM_PROVIDER", "openai").lower()
@@ -3770,6 +3852,77 @@ def main():
                 file=sys.stderr,
             )
             sys.exit(1)
+
+    from eval_kit.enterprise_signals.collectors.adjacent_artifacts import (
+        AdjacentArtifactsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.broken_evaluator_risk import (
+        BrokenEvaluatorRiskCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.cicd_guardrails import (
+        CicdGuardrailsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.cross_package import (
+        CrossPackageCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.db_migration import DbMigrationCollector
+    from eval_kit.enterprise_signals.collectors.dependency_list import (
+        DependencyListCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.enterprise_data_handling import (
+        EnterpriseDataHandlingCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.enterprise_domain import (
+        EnterpriseDomainCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.environment_sensitivity import (
+        EnvironmentSensitivityCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.external_connection import (
+        ExternalConnectionCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.feature_flags import (
+        FeatureFlagsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.hardware_env_gaps import (
+        HardwareEnvGapsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.incident import IncidentSignalCollector
+    from eval_kit.enterprise_signals.collectors.multi_tenancy import (
+        MultiTenancyCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.pr_description_quality import (
+        PrDescriptionQualityCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.resiliency_patterns import (
+        ResiliencyPatternsCollector,
+    )
+    from eval_kit.enterprise_signals.collectors.vendor_integration import (
+        VendorIntegrationCollector,
+    )
+
+    register_pr_collector(IncidentSignalCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(EnterpriseDomainCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(ExternalConnectionCollector())
+    register_pr_collector(DbMigrationCollector())
+    register_pr_collector(MultiTenancyCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(AdjacentArtifactsCollector())
+    register_pr_collector(CrossPackageCollector())
+    register_pr_collector(EnvironmentSensitivityCollector())
+    register_pr_collector(BrokenEvaluatorRiskCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(HardwareEnvGapsCollector())
+    register_pr_collector(VendorIntegrationCollector(skip_llm=args.skip_quality_llm))
+    register_pr_collector(PrDescriptionQualityCollector())
+    register_pr_collector(FeatureFlagsCollector())
+    register_pr_collector(ResiliencyPatternsCollector())
+
+    from eval_kit.enterprise_signals.registry import register_repo_collector
+
+    register_repo_collector(DependencyListCollector())
+    register_repo_collector(CicdGuardrailsCollector())
+    register_repo_collector(
+        EnterpriseDataHandlingCollector(skip_llm=args.skip_quality_llm)
+    )
 
     if args.start_date:
         start_date = datetime.strptime(args.start_date, "%Y-%m-%d").replace(
@@ -3908,6 +4061,68 @@ def main():
             )
             if pr_taxonomy:
                 report_json["pr_taxonomy"] = pr_taxonomy
+
+        if not args.skip_pr_rubrics and report.pr_analysis.pr_rubrics:
+            rubric_accepted_numbers = {
+                e["number"]
+                for e in report.pr_analysis.pr_rubrics
+                if e.get("rubric_accepted")
+            }
+            rubric_accepted_prs = [
+                pr
+                for pr in report.pr_analysis.accepted_prs
+                if pr.get("number") in rubric_accepted_numbers
+            ]
+            if rubric_accepted_prs:
+                fairness_lang_config = load_language_config()
+                fairness_pr_analyzer = PRAnalyzer(
+                    platform_client=platform_client,
+                    language_config=fairness_lang_config,
+                    repo_path=repo_path,
+                    min_test_files=args.min_test_files,
+                    max_non_test_files=args.max_non_test_files,
+                    min_code_changes=args.min_code_changes,
+                    start_date=start_date,
+                )
+                fe = FairnessEvaluator()
+                fairness_results: List[dict] = []
+                try:
+                    for pr in rubric_accepted_prs:
+                        pr_number = pr.get("number")
+                        if args.pr_number is not None and pr_number != args.pr_number:
+                            continue
+                        entry: dict = {"number": pr_number}
+                        base_sha = pr.get("baseRefOid", "") or ""
+                        head_sha = pr.get("headRefOid", "") or ""
+                        if not base_sha or not head_sha:
+                            entry["error"] = "missing base or head SHA"
+                            fairness_results.append(entry)
+                            continue
+                        full_patch = fairness_pr_analyzer._get_patch_from_git(
+                            base_sha, head_sha, pr_number=pr_number
+                        )
+                        if not full_patch:
+                            entry["error"] = "could not retrieve patch"
+                            fairness_results.append(entry)
+                            continue
+                        src_diff, test_diff = split_patch_by_test_files(
+                            full_patch,
+                            lambda path, cfg: is_test_file_path(path, cfg),
+                            fairness_lang_config,
+                        )
+                        problem_statement = _problem_statement_for_pr(pr)
+                        result = fe.evaluate(src_diff, test_diff, problem_statement)
+                        if result:
+                            entry.update(result)
+                        else:
+                            entry["error"] = "fairness evaluation failed"
+                        fairness_results.append(entry)
+                except CostLimitAborted:
+                    if fairness_results:
+                        report_json["fairness_eval"] = fairness_results
+                    raise
+                if fairness_results:
+                    report_json["fairness_eval"] = fairness_results
 
     except CostLimitAborted:
         logger.warning("LLM cost limit reached. Saving partial results.")
