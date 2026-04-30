@@ -14,7 +14,26 @@ from eval_kit.llm_client import call_llm
 
 PYTHON_EXTS = {".py"}
 JS_EXTS = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
-SOURCE_EXTS = PYTHON_EXTS | JS_EXTS
+GO_EXTS = {".go"}
+RUBY_EXTS = {".rb"}
+RUST_EXTS = {".rs"}
+PHP_EXTS = {".php"}
+JAVA_EXTS = {".java", ".kt", ".scala", ".groovy"}
+DOTNET_EXTS = {".cs", ".fs", ".vb"}
+CPP_EXTS = {".c", ".cpp", ".cc", ".h", ".hpp"}
+COBOL_EXTS = {".cob", ".cbl", ".cobol"}
+SOURCE_EXTS = (
+    PYTHON_EXTS
+    | JS_EXTS
+    | GO_EXTS
+    | RUBY_EXTS
+    | RUST_EXTS
+    | PHP_EXTS
+    | JAVA_EXTS
+    | DOTNET_EXTS
+    | CPP_EXTS
+    | COBOL_EXTS
+)
 CONFIG_EXTS = {".json", ".yml", ".yaml", ".toml", ".cfg", ".lock"}
 
 SKIP_DIRS = {
@@ -68,9 +87,20 @@ MANIFEST_NAMES = {
 
 
 def _detect_language(files: list[str]) -> str:
-    py = sum(1 for f in files if os.path.splitext(f)[1] in PYTHON_EXTS)
-    js = sum(1 for f in files if os.path.splitext(f)[1] in JS_EXTS)
-    return "python" if py >= js else "js"
+    """Return dominant language based on file extension counts."""
+    counts = {
+        "python": sum(1 for f in files if os.path.splitext(f)[1] in PYTHON_EXTS),
+        "js": sum(1 for f in files if os.path.splitext(f)[1] in JS_EXTS),
+        "go": sum(1 for f in files if os.path.splitext(f)[1] in GO_EXTS),
+        "ruby": sum(1 for f in files if os.path.splitext(f)[1] in RUBY_EXTS),
+        "rust": sum(1 for f in files if os.path.splitext(f)[1] in RUST_EXTS),
+        "php": sum(1 for f in files if os.path.splitext(f)[1] in PHP_EXTS),
+        "java": sum(1 for f in files if os.path.splitext(f)[1] in JAVA_EXTS),
+        "dotnet": sum(1 for f in files if os.path.splitext(f)[1] in DOTNET_EXTS),
+        "cpp": sum(1 for f in files if os.path.splitext(f)[1] in CPP_EXTS),
+        "cobol": sum(1 for f in files if os.path.splitext(f)[1] in COBOL_EXTS),
+    }
+    return max(counts, key=counts.get)
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +171,31 @@ ROUTE_PATTERNS = [
         r"""export\s+(?:default\s+)?(?:async\s+)?function\s+(?:GET|POST|PUT|DELETE|PATCH|handler)\b""",
         re.I,
     ),
+    # Go: http.HandleFunc, Gin routes
+    re.compile(
+        r"""(?:http\.HandleFunc|r\.(?:GET|POST|PUT|DELETE|PATCH|Handle))\s*\(\s*["']([^"']+)""",
+        re.I,
+    ),
+    # Java: Spring annotations
+    re.compile(
+        r"""@(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\s*\(""",
+        re.I,
+    ),
+    # Java: RestController
+    re.compile(r"""@RestController\b""", re.I),
+    # Ruby: Rails routes
+    re.compile(
+        r"""(?:^|\s)(?:get|post|put|delete|patch|resources?)\s+['"]([^'"]+)""", re.I
+    ),
+    # PHP: Laravel routes
+    re.compile(
+        r"""Route::(?:get|post|put|delete|patch|any)\s*\(\s*["']([^"']+)""", re.I
+    ),
+    # .NET: ASP.NET attributes
+    re.compile(
+        r"""(?:\[HttpGet\]|\[HttpPost\]|\[HttpPut\]|\[HttpDelete\]|\[Route\s*\()""",
+        re.I,
+    ),
 ]
 ADMIN_ROUTE_RE = re.compile(r"""(?:admin|superuser|staff|manage|dashboard)""", re.I)
 AUTH_RE = re.compile(
@@ -202,6 +257,41 @@ INJECTION_PATTERNS = [
             re.I,
         ),
         "Template injection",
+    ),
+    # Go - fmt.Sprintf in SQL
+    (
+        re.compile(r"(?:db|tx|conn)\.\w+\(.*fmt\.Sprintf", re.S),
+        "SQL injection risk (Go fmt.Sprintf)",
+    ),
+    # Java - string concatenation in SQL
+    (
+        re.compile(r'"(?:SELECT|INSERT|UPDATE|DELETE)[^"]*"\s*\+', re.I),
+        "SQL user-input concatenation (Java)",
+    ),
+    # Ruby - string interpolation in ActiveRecord raw queries
+    (
+        re.compile(r'(?:execute|find_by_sql|where)\s*\(\s*"[^"]*#\{', re.I),
+        "SQL injection risk (Ruby interpolation)",
+    ),
+    # PHP - string concatenation in queries
+    (
+        re.compile(r'(?:query|execute|prepare)\s*\(\s*(?:"|\')[^"\']*\.\s*\$', re.I),
+        "SQL injection risk (PHP concatenation)",
+    ),
+    # Java/C# - Runtime.exec with string concat
+    (
+        re.compile(r"Runtime\.getRuntime\(\)\.exec\s*\(", re.I),
+        "Command injection (Java Runtime.exec)",
+    ),
+    # PHP - shell execution with variables
+    (
+        re.compile(r'(?:shell_exec|system|passthru)\s*\(\s*["\']?[^"\']*\$', re.I),
+        "Command injection (PHP shell execution)",
+    ),
+    # Ruby - backtick execution with interpolation
+    (
+        re.compile(r"`[^`]*#\{", re.I),
+        "Command injection (Ruby backtick interpolation)",
     ),
 ]
 
@@ -786,6 +876,46 @@ def _scan_supply_chain(root: str) -> tuple[int, list[str]]:
                 count += 1
                 details.append(f"UNOFFICIAL_REGISTRY: custom index-url in {fname}")
                 break
+
+    # pom.xml: local jar references (fragile)
+    pom = os.path.join(root, "pom.xml")
+    if os.path.exists(pom):
+        if re.search(r"<systemPath>", _read(pom)):
+            count += 1
+            details.append(
+                "GIT_DEP in pom.xml: <systemPath> local jar reference (fragile)"
+            )
+
+    # build.gradle: local file deps
+    for gradle_file in ("build.gradle", "build.gradle.kts"):
+        gradle = os.path.join(root, gradle_file)
+        if os.path.exists(gradle):
+            if re.search(r"files\s*\(", _read(gradle)):
+                count += 1
+                details.append(f"GIT_DEP in {gradle_file}: local file dependency")
+                break
+
+    # Gemfile: path: or git: sources
+    gemfile = os.path.join(root, "Gemfile")
+    if os.path.exists(gemfile):
+        gem_refs = re.findall(
+            r"gem\s+['\"][^'\"]+['\"].*(?:path:|git:)[^\n]+", _read(gemfile)
+        )
+        if gem_refs:
+            count += len(gem_refs)
+            details.append(
+                f"GIT_DEP in Gemfile: {len(gem_refs)} path/git-sourced gem(s)"
+            )
+
+    # go.mod: replace directives pointing to local paths
+    gomod = os.path.join(root, "go.mod")
+    if os.path.exists(gomod):
+        local_replaces = re.findall(r"^replace\s+\S+\s+=>\s+\./", _read(gomod), re.M)
+        if local_replaces:
+            count += len(local_replaces)
+            details.append(
+                f"GIT_DEP in go.mod: {len(local_replaces)} local path replace directive(s)"
+            )
 
     return count, details
 
