@@ -94,6 +94,7 @@ from eval_kit.quality_evaluator import (
 from eval_kit.repo_evaluator_helpers import (
     MAX_ISSUE_WORDS,
     MIN_ISSUE_WORDS,
+    clone_repo,
     count_words,
     get_full_patch_content,
     get_language_config,
@@ -3689,68 +3690,6 @@ def write_json_dict_to_csv(data: dict, csv_path: Path) -> None:
         writer.writerow(row)
 
 
-def clone_repo(
-    repo_full_name: str, temp_dir: Path, token: str, platform: str = "github"
-) -> Path:
-    """Clone repository to temporary directory."""
-
-    if platform == "bitbucket":
-        repo_url = f"https://x-token-auth:{token}@bitbucket.org/{repo_full_name}.git"
-    elif platform == "gitlab":
-        repo_url = f"https://oauth2:{token}@gitlab.com/{repo_full_name}.git"
-    else:  # default to github
-        repo_url = f"https://{token}@github.com/{repo_full_name}.git"
-
-    clone_path = temp_dir / repo_full_name.replace("/", "_")
-
-    logger.info(f"Cloning {repo_full_name} to {clone_path}...")
-    increment = 50
-    result = subprocess.run(
-        # deep clone so we can get the total commits
-        ["git", "clone", repo_url, str(clone_path), "--depth", f"{increment}"],
-        capture_output=True,
-        text=True,
-        timeout=900,
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to clone repository: {result.stderr}")
-
-    def is_shallow(path):
-        """Checks if the repository is still shallow."""
-        result = subprocess.run(
-            ["git", "rev-parse", "--is-shallow-repository"],
-            cwd=path,
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout.strip() == "true"
-
-    # The Unshallow Loop
-    while is_shallow(clone_path):
-        print(f"Deepening history by {increment} commits...")
-
-        result = subprocess.run(
-            ["git", "fetch", f"--deepen={increment}"],
-            cwd=clone_path,
-            capture_output=True,
-            text=True,
-            timeout=900,
-        )
-
-        if result.returncode != 0:
-            print(f"Fetch failed or reached the end of history: {result.stderr}")
-            # Sometimes --deepen fails if you hit the very beginning of the repo.
-            # We try a final --unshallow to clean up.
-            subprocess.run(["git", "fetch", "--unshallow"], cwd=clone_path)
-            break
-    if result.returncode != 0:
-        raise RuntimeError(f"Failed to fetch repository history: {result.stderr}")
-
-    logger.info("Successfully cloned repository")
-    return clone_path
-
-
 def parse_repo_name(repo_string: str) -> Tuple[str, str]:
     """Parse owner/repo-name format, handling platform prefixes."""
     repo_string = repo_string.strip()
@@ -4084,6 +4023,12 @@ def main():
                     "security_check_signals": "",
                     "production_quality_critical": "",
                     "production_quality_signals": "",
+                    "static_vibe_coding_critical": "",
+                    "static_vibe_coding_signals": "",
+                    "static_security_check_critical": "",
+                    "static_security_check_signals": "",
+                    "static_production_quality_critical": "",
+                    "static_production_quality_signals": "",
                 }
             )
 

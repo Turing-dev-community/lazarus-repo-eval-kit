@@ -44,7 +44,26 @@ from eval_kit.llm_client import call_llm
 
 PYTHON_EXTS = {".py"}
 JS_EXTS = {".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"}
-SOURCE_EXTS = PYTHON_EXTS | JS_EXTS
+GO_EXTS = {".go"}
+RUBY_EXTS = {".rb"}
+RUST_EXTS = {".rs"}
+PHP_EXTS = {".php"}
+JAVA_EXTS = {".java", ".kt", ".scala", ".groovy"}
+DOTNET_EXTS = {".cs", ".fs", ".vb"}
+CPP_EXTS = {".c", ".cpp", ".cc", ".h", ".hpp"}
+COBOL_EXTS = {".cob", ".cbl", ".cobol"}
+SOURCE_EXTS = (
+    PYTHON_EXTS
+    | JS_EXTS
+    | GO_EXTS
+    | RUBY_EXTS
+    | RUST_EXTS
+    | PHP_EXTS
+    | JAVA_EXTS
+    | DOTNET_EXTS
+    | CPP_EXTS
+    | COBOL_EXTS
+)
 CONFIG_EXTS = {".json", ".yml", ".yaml", ".toml", ".cfg", ".env", ".ini"}
 ALL_EXTS = SOURCE_EXTS | CONFIG_EXTS
 
@@ -90,10 +109,20 @@ TOOLGEN_DIRS = {
 
 
 def _detect_language(files: list[str]) -> str:
-    """Return 'python' or 'js' based on dominant file extension count."""
-    py_count = sum(1 for f in files if os.path.splitext(f)[1] in PYTHON_EXTS)
-    js_count = sum(1 for f in files if os.path.splitext(f)[1] in JS_EXTS)
-    return "python" if py_count >= js_count else "js"
+    """Return dominant language based on file extension counts."""
+    counts = {
+        "python": sum(1 for f in files if os.path.splitext(f)[1] in PYTHON_EXTS),
+        "js": sum(1 for f in files if os.path.splitext(f)[1] in JS_EXTS),
+        "go": sum(1 for f in files if os.path.splitext(f)[1] in GO_EXTS),
+        "ruby": sum(1 for f in files if os.path.splitext(f)[1] in RUBY_EXTS),
+        "rust": sum(1 for f in files if os.path.splitext(f)[1] in RUST_EXTS),
+        "php": sum(1 for f in files if os.path.splitext(f)[1] in PHP_EXTS),
+        "java": sum(1 for f in files if os.path.splitext(f)[1] in JAVA_EXTS),
+        "dotnet": sum(1 for f in files if os.path.splitext(f)[1] in DOTNET_EXTS),
+        "cpp": sum(1 for f in files if os.path.splitext(f)[1] in CPP_EXTS),
+        "cobol": sum(1 for f in files if os.path.splitext(f)[1] in COBOL_EXTS),
+    }
+    return max(counts, key=counts.get)
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +149,37 @@ PATTERNS_ERROR = {
         ),
         "graceful": re.compile(r"(?:fallback|graceful|degrade|circuit.?breaker)", re.I),
     },
+    "go": {
+        "ignored_err": re.compile(r"\b_\s*(?:,\s*_)?\s*=\s*\w+\(", re.M),
+        "panic": re.compile(r"\bpanic\(", re.M),
+    },
+    "java": {
+        "broad_catch": re.compile(r"catch\s*\(\s*Exception\s+\w+", re.M),
+        "print_stack": re.compile(r"\.printStackTrace\(\)", re.M),
+        "swallow": re.compile(r"catch\s*\([^)]+\)\s*\{\s*\}", re.M),
+    },
+    "rust": {
+        "unwrap": re.compile(r"\.unwrap\(\)", re.M),
+        "expect_generic": re.compile(
+            r'\.expect\("(?:error|failed|err|oops|something went wrong)"\)', re.I
+        ),
+    },
+    "ruby": {
+        "broad_rescue": re.compile(r"\brescue\s+Exception\b", re.M),
+        "rescue_all": re.compile(r"\brescue\s*\n", re.M),
+    },
+    "php": {
+        "empty_catch": re.compile(r"catch\s*\([^)]*\)\s*\{\s*\}", re.M),
+        "broad_catch": re.compile(r"catch\s*\(\s*Exception\s+\$\w+", re.M),
+    },
+    "dotnet": {
+        "broad_catch": re.compile(r"catch\s*\(\s*Exception\s+\w+", re.M),
+        "empty_catch": re.compile(r"catch\s*\([^)]*\)\s*\{\s*\}", re.M),
+    },
+    "cpp": {
+        "catch_all": re.compile(r"catch\s*\(\s*\.\.\.\s*\)", re.M),
+        "empty_catch": re.compile(r"catch\s*\([^)]*\)\s*\{\s*\}", re.M),
+    },
 }
 
 # Logging
@@ -138,6 +198,48 @@ PATTERNS_LOG = {
         ),
         "debugger": re.compile(r"\bdebugger\b", re.M),
         "context": re.compile(r"(?:requestId|correlationId|traceId|context)", re.I),
+    },
+    "go": {
+        "bare": re.compile(r"fmt\.(?:Println|Printf|Print)\s*\(", re.M),
+        "structured": re.compile(r"(?:logrus|zap|zerolog|slog)\.", re.I),
+        "context": re.compile(r"(?:requestID|correlationID|traceID|WithField)", re.I),
+    },
+    "java": {
+        "bare": re.compile(r"System\.out\.print(?:ln)?\s*\(", re.M),
+        "print_stack": re.compile(r"\.printStackTrace\(\)", re.M),
+        "structured": re.compile(
+            r"(?:LoggerFactory\.getLogger|@Slf4j|log\.\w+\s*\()", re.I
+        ),
+        "context": re.compile(r"(?:MDC\.|requestId|correlationId|traceId)", re.I),
+    },
+    "ruby": {
+        "bare": re.compile(r"(?:^|\s)(?:puts|p )\s", re.M),
+        "structured": re.compile(
+            r"(?:Rails\.logger|Logger\.new|Logging\.|logger\.\w+)\s*\(", re.I
+        ),
+        "context": re.compile(r"(?:request_id|correlation_id|trace_id)", re.I),
+    },
+    "php": {
+        "bare": re.compile(r"(?:echo\s|var_dump\s*\(|print_r\s*\()", re.M),
+        "structured": re.compile(
+            r"(?:Monolog|\\Log::|\\Illuminate\\Log|logger\(\))", re.I
+        ),
+        "context": re.compile(r"(?:request_id|correlation_id|trace_id)", re.I),
+    },
+    "rust": {
+        "bare": re.compile(r"println!\s*\(", re.M),
+        "structured": re.compile(
+            r"(?:log::(?:info|warn|error|debug)|tracing::(?:info|warn|error|debug))",
+            re.I,
+        ),
+        "context": re.compile(r"(?:#\[instrument\]|tracing::span)", re.I),
+    },
+    "dotnet": {
+        "bare": re.compile(r"Console\.Write(?:Line)?\s*\(", re.M),
+        "structured": re.compile(
+            r"(?:ILogger|_logger\.\w+|Log\.\w+|Serilog|NLog)", re.I
+        ),
+        "context": re.compile(r"(?:correlationId|requestId|traceId|LogContext)", re.I),
     },
 }
 
@@ -160,6 +262,24 @@ PATTERNS_CONFIG = {
     },
     "js": {
         "env_var": re.compile(r"process\.env\.", re.I),
+    },
+    "go": {
+        "env_var": re.compile(r"os\.Getenv\s*\(", re.I),
+    },
+    "java": {
+        "env_var": re.compile(r"(?:System\.getenv\s*\(|@Value\s*\()", re.I),
+    },
+    "ruby": {
+        "env_var": re.compile(r"ENV\s*[\[\.]", re.I),
+    },
+    "php": {
+        "env_var": re.compile(r"(?:\$_ENV\s*\[|getenv\s*\()", re.I),
+    },
+    "rust": {
+        "env_var": re.compile(r"std::env::var\s*\(", re.I),
+    },
+    "dotnet": {
+        "env_var": re.compile(r"Environment\.GetEnvironmentVariable\s*\(", re.I),
     },
 }
 
@@ -187,6 +307,67 @@ PATTERNS_DB = {
             r"(?:createConnection|\.connect\s*\(|MongoClient\s*\(|mysql\.createConnection)",
             re.I,
         ),
+    },
+    "go": {
+        "raw_query": re.compile(
+            r"""db\.(?:Query|Exec|QueryRow)\s*\(\s*fmt\.Sprintf""", re.I
+        ),
+        "orm": re.compile(r"(?:gorm|sqlx|ent\.)", re.I),
+        "pool": re.compile(r"(?:SetMaxOpenConns|SetMaxIdleConns|sql\.Open)", re.I),
+        "raw_connect": re.compile(r"sql\.Open\s*\(", re.I),
+    },
+    "java": {
+        "raw_query": re.compile(
+            r"""(?:createStatement|executeQuery|executeUpdate)\s*\(\s*["'][^"']*["']\s*\+""",
+            re.I,
+        ),
+        "orm": re.compile(
+            r"(?:@Entity|EntityManager|JpaRepository|HibernateTemplate|@Repository)",
+            re.I,
+        ),
+        "pool": re.compile(
+            r"(?:HikariCP|HikariDataSource|c3p0|DataSource|@Bean.*DataSource)", re.I
+        ),
+        "raw_connect": re.compile(r"DriverManager\.getConnection\s*\(", re.I),
+    },
+    "ruby": {
+        "raw_query": re.compile(
+            r"""(?:execute|find_by_sql)\s*\(\s*["'][^"']*#\{""", re.I
+        ),
+        "orm": re.compile(
+            r"(?:ActiveRecord|belongs_to|has_many|has_one|Sequel\.connect)", re.I
+        ),
+        "pool": re.compile(r"(?:pool:|ActiveRecord::Base\.establish_connection)", re.I),
+        "raw_connect": re.compile(
+            r"(?:ActiveRecord::Base\.establish_connection|Sequel\.connect)\s*\(", re.I
+        ),
+    },
+    "php": {
+        "raw_query": re.compile(r"""(?:query|exec)\s*\(\s*["'][^"']*\.\s*\$""", re.I),
+        "orm": re.compile(r"(?:Eloquent|Doctrine|PDO|QueryBuilder)", re.I),
+        "pool": re.compile(r"(?:persistent|PDO::ATTR_PERSISTENT)", re.I),
+        "raw_connect": re.compile(r"new\s+PDO\s*\(", re.I),
+    },
+    "rust": {
+        "raw_query": re.compile(r"""sqlx::query!\s*\(\s*r?["'].*\{\}""", re.I),
+        "orm": re.compile(r"(?:diesel|sqlx|sea_orm)", re.I),
+        "pool": re.compile(r"(?:Pool::new|PgPool|MySqlPool|SqlitePool)", re.I),
+        "raw_connect": re.compile(
+            r"(?:PgPool::connect|MySqlPool::connect|SqlitePool::connect)\s*\(", re.I
+        ),
+    },
+    "dotnet": {
+        "raw_query": re.compile(
+            r"""(?:ExecuteReader|ExecuteNonQuery|ExecuteScalar)\s*\(""", re.I
+        ),
+        "orm": re.compile(
+            r"(?:DbContext|IDbContext|EntityFramework|\.Include\s*\(|\.Where\s*\(.*=>)",
+            re.I,
+        ),
+        "pool": re.compile(
+            r"(?:SqlConnectionStringBuilder|Pooling=true|Min Pool Size)", re.I
+        ),
+        "raw_connect": re.compile(r"new\s+SqlConnection\s*\(", re.I),
     },
     "common": {
         "query_in_loop": re.compile(
@@ -220,6 +401,50 @@ PATTERNS_RESOURCE = {
         ),
         "timeout": re.compile(r"(?:timeout|AbortController|signal\s*:)", re.I),
     },
+    "go": {
+        "http_call": re.compile(r"http\.(?:Get|Post|Put|Do)\s*\("),
+        "cleanup": re.compile(
+            r"(?:defer\s+\w+\.Close\(\)|context\.WithTimeout|context\.WithDeadline)",
+            re.I,
+        ),
+        "timeout": re.compile(
+            r"(?:Timeout:|context\.WithTimeout|context\.WithDeadline)", re.I
+        ),
+        "goroutine_leak": re.compile(r"go\s+func\s*\(", re.M),
+    },
+    "java": {
+        "http_call": re.compile(
+            r"(?:HttpClient|RestTemplate|WebClient|OkHttp)\.", re.I
+        ),
+        "cleanup": re.compile(
+            r"(?:try\s*\(|\.close\(\)|finally\s*\{|AutoCloseable)", re.I
+        ),
+        "timeout": re.compile(
+            r"(?:setConnectTimeout|setReadTimeout|timeout\s*\()", re.I
+        ),
+    },
+    "ruby": {
+        "http_call": re.compile(r"(?:Net::HTTP|HTTParty|Faraday|RestClient)\.", re.I),
+        "cleanup": re.compile(r"(?:File\.open\s*\{|ensure\b|\.close\b)", re.I),
+        "timeout": re.compile(r"(?:open_timeout|read_timeout|timeout:)", re.I),
+    },
+    "php": {
+        "http_call": re.compile(r"(?:curl_exec|file_get_contents|Guzzle|Http::)", re.I),
+        "cleanup": re.compile(r"(?:fclose\s*\(|curl_close\s*\(|finally\s*\{)", re.I),
+        "timeout": re.compile(r"(?:CURLOPT_TIMEOUT|timeout\s*=>|connectTimeout)", re.I),
+    },
+    "rust": {
+        "http_call": re.compile(r"(?:reqwest|ureq|surf)\.", re.I),
+        "cleanup": re.compile(r"(?:drop\s*\(|impl Drop|Box::leak)", re.I),
+        "timeout": re.compile(r"(?:timeout\s*\(|Duration::from)", re.I),
+    },
+    "dotnet": {
+        "http_call": re.compile(r"(?:HttpClient|WebClient|RestSharp)\.", re.I),
+        "cleanup": re.compile(
+            r"(?:using\s*\(|IDisposable|\.Dispose\(\)|finally\s*\{)", re.I
+        ),
+        "timeout": re.compile(r"(?:Timeout\s*=|CancellationToken|WithTimeout)", re.I),
+    },
 }
 
 # API design
@@ -248,6 +473,63 @@ PATTERNS_API = {
             r"(?:page|limit|offset|pageSize|cursor|skip|take)\b", re.I
         ),
     },
+    "go": {
+        "route": re.compile(
+            r"""(?:http\.HandleFunc|r\.(?:GET|POST|PUT|DELETE|PATCH|Handle))\s*\(\s*["']([^"']+)""",
+            re.I,
+        ),
+        "schema": re.compile(
+            r"(?:binding:|validate:|gin\.Context|go-playground/validator)", re.I
+        ),
+        "pagination": re.compile(r"(?:page|limit|offset|cursor|skip|take)\b", re.I),
+    },
+    "java": {
+        "route": re.compile(
+            r"""@(?:RequestMapping|GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\s*(?:\(\s*["']([^"']+)["'])?""",
+            re.I,
+        ),
+        "schema": re.compile(
+            r"(?:@Valid|@Validated|@RequestBody|javax\.validation|jakarta\.validation)",
+            re.I,
+        ),
+        "pagination": re.compile(
+            r"(?:Pageable|Page<|PageRequest|page|limit|offset)\b", re.I
+        ),
+    },
+    "ruby": {
+        "route": re.compile(
+            r"""(?:get|post|put|delete|patch|resources?)\s+['"]([^'"]+)""",
+            re.I,
+        ),
+        "schema": re.compile(
+            r"(?:dry-validation|ActiveModel::Validations|validates\s+:)", re.I
+        ),
+        "pagination": re.compile(
+            r"(?:page|limit|offset|per_page|cursor|kaminari|will_paginate)\b", re.I
+        ),
+    },
+    "php": {
+        "route": re.compile(
+            r"""Route::(?:get|post|put|delete|patch|any)\s*\(\s*["']([^"']+)""",
+            re.I,
+        ),
+        "schema": re.compile(r"(?:Validator::make|FormRequest|@OA\\|OpenApi)", re.I),
+        "pagination": re.compile(
+            r"(?:page|limit|offset|per_page|paginate\s*\(|cursor)\b", re.I
+        ),
+    },
+    "dotnet": {
+        "route": re.compile(
+            r"""(?:\[HttpGet\]|\[HttpPost\]|\[HttpPut\]|\[HttpDelete\]|\[Route\s*\(\s*["']([^"']+))""",
+            re.I,
+        ),
+        "schema": re.compile(
+            r"(?:\[Required\]|\[FromBody\]|FluentValidation|ModelState\.IsValid)", re.I
+        ),
+        "pagination": re.compile(
+            r"(?:page|limit|offset|pageSize|cursor|skip|take)\b", re.I
+        ),
+    },
 }
 
 # Tech debt
@@ -270,6 +552,20 @@ PATTERNS_DEBT = {
     },
     "ts": {
         "any_type": re.compile(r":\s*any\b"),
+    },
+    "go": {
+        "interface_any": re.compile(r"\binterface\s*\{\s*\}", re.M),
+    },
+    "java": {
+        "raw_types": re.compile(r"\b(?:List|Map|Set|Collection)\s+\w+\s*=", re.M),
+        "unchecked_cast": re.compile(r"\(\s*\([A-Z]\w+\)\s*\w+\)", re.M),
+    },
+    "php": {
+        "untyped": re.compile(r"function\s+\w+\s*\([^)]*\)\s*(?!:\s*\w)", re.M),
+    },
+    "dotnet": {
+        "object_type": re.compile(r":\s*object\b", re.M),
+        "dynamic_type": re.compile(r"\bdynamic\s+\w+\s*=", re.M),
     },
 }
 
@@ -339,53 +635,6 @@ def _is_test_file(path: str, root: str) -> bool:
     return any(p in rel for p in ["test", "spec", "__tests__", "tests/", "testing/"])
 
 
-def _is_turing_file(filepath: str, root: str, patterns: list[str]) -> bool:
-    """Return True if >50% of lines are authored by turing-pattern accounts."""
-    if not patterns:
-        return False
-    blame = _run_git(["blame", "--porcelain", _rel(filepath, root)], root)
-    if not blame:
-        return False
-
-    total_lines = 0
-    turing_lines = 0
-    author = ""
-    email = ""
-
-    for line in blame.split("\n"):
-        if line.startswith("author "):
-            author = line[7:].strip().lower()
-        elif line.startswith("author-mail "):
-            email = line[12:].strip().lower().strip("<>")
-            combined = f"{author} {email}"
-            is_turing = any(p in combined for p in patterns)
-            total_lines += 1
-            if is_turing:
-                turing_lines += 1
-
-    if total_lines == 0:
-        return False
-    return (turing_lines / total_lines) > 0.5
-
-
-def _filter_non_turing_files(
-    root: str, files: list[str], patterns: list[str], verbose_log=None
-) -> list[str]:
-    if not patterns:
-        return files
-    kept, excluded = [], 0
-    for f in files:
-        if _is_turing_file(f, root, patterns):
-            excluded += 1
-        else:
-            kept.append(f)
-    if verbose_log and excluded:
-        verbose_log(
-            f"      Excluded {excluded} turing-authored files, kept {len(kept)}"
-        )
-    return kept
-
-
 def _count_params(param_str: str, is_python: bool = False) -> int:
     """Count meaningful parameters, stripping self/cls for Python."""
     params = [p.strip() for p in param_str.split(",") if p.strip()]
@@ -430,9 +679,32 @@ def _c1_error_handling(root: str, files: list[str], lang: str) -> tuple[int, lis
             mutable_defaults += len(pat["python"]["mutable_default"].findall(content))
             custom_errors += len(pat["python"]["custom_error"].findall(content))
 
-        else:  # js
+        elif lang == "js":
             empty_catch += len(pat["js"]["empty_catch"].findall(content))
             custom_errors += len(pat["js"]["custom_error"].findall(content))
+
+        elif lang in pat:
+            lang_pat = pat[lang]
+            if "broad_catch" in lang_pat:
+                broad_no_reraise += len(lang_pat["broad_catch"].findall(content))
+            if "empty_catch" in lang_pat or "swallow" in lang_pat:
+                empty_catch += len(
+                    lang_pat.get("empty_catch", re.compile(r"^$")).findall(content)
+                )
+                empty_catch += len(
+                    lang_pat.get("swallow", re.compile(r"^$")).findall(content)
+                )
+            if "unwrap" in lang_pat:
+                # Rust unwrap counts as potential error swallow
+                unwrap_count = len(lang_pat["unwrap"].findall(content))
+                if unwrap_count >= 5:
+                    bare_count += 1
+            if "panic" in lang_pat:
+                panic_count = len(lang_pat["panic"].findall(content))
+                if panic_count >= 3:
+                    bare_count += 1
+            if "broad_rescue" in lang_pat:
+                broad_no_reraise += len(lang_pat["broad_rescue"].findall(content))
 
         # Large try blocks (>15 non-empty lines)
         try_blocks = re.findall(
@@ -505,13 +777,28 @@ def _c2_logging(root: str, files: list[str], lang: str) -> tuple[int, list[str]]
             has_structured = bool(pat["python"]["structured"].search(content))
             if pat["python"]["context"].search(content):
                 has_context = True
-        else:
+        elif lang == "js":
             has_bare = bool(pat["js"]["bare"].search(content))
             has_structured = bool(pat["js"]["structured"].search(content))
             if pat["js"]["debugger"].search(content):
                 debugger_files += 1
             if pat["js"]["context"].search(content):
                 has_context = True
+        elif lang in pat:
+            lang_pat = pat[lang]
+            has_bare = bool(lang_pat["bare"].search(content))
+            has_structured = bool(lang_pat["structured"].search(content))
+            if lang_pat.get("context") and lang_pat["context"].search(content):
+                has_context = True
+            if (
+                lang == "java"
+                and lang_pat.get("print_stack")
+                and lang_pat["print_stack"].search(content)
+            ):
+                bare_files += 1  # treat printStackTrace as bare logging
+        else:
+            has_bare = False
+            has_structured = False
 
         if has_bare:
             bare_files += 1
@@ -586,11 +873,22 @@ def _c3_configuration(root: str, files: list[str], lang: str) -> tuple[int, list
                 env_usage += 1
             if re.search(r"(?:dotenv|from_env|config\(\))", content, re.I):
                 has_dotenv = True
-        else:
+        elif lang == "js":
             if pat["js"]["env_var"].search(content):
                 env_usage += 1
             if re.search(r"(?:dotenv|next\.config|env\.local)", content, re.I):
                 has_dotenv = True
+        elif lang in pat:
+            if pat[lang]["env_var"].search(content):
+                env_usage += 1
+            if re.search(
+                r"(?:dotenv|config|viper|envconfig|@ConfigurationProperties)",
+                content,
+                re.I,
+            ):
+                has_dotenv = True
+        else:
+            pass  # unsupported language for env var detection
 
         # IP and port detection (skip comments and string values)
         for line in content.split("\n"):
@@ -687,16 +985,17 @@ def _c4_database(root: str, files: list[str], lang: str) -> tuple[int, list[str]
         lines = content.split("\n")
         rel = _rel(f, root)
 
-        lang_pat = pat[lang]
-        raw_queries += len(lang_pat["raw_query"].findall(content))
-        if lang_pat["orm"].search(content):
-            has_orm = True
-        if lang_pat["pool"].search(content):
-            has_pool = True
-        if lang_pat["raw_connect"].search(content):
-            has_raw_connect = True
-            if not lang_pat["pool"].search(content):
-                no_pool_files.append(rel)
+        lang_pat = pat.get(lang)
+        if lang_pat:
+            raw_queries += len(lang_pat["raw_query"].findall(content))
+            if lang_pat["orm"].search(content):
+                has_orm = True
+            if lang_pat["pool"].search(content):
+                has_pool = True
+            if lang_pat["raw_connect"].search(content):
+                has_raw_connect = True
+                if not lang_pat["pool"].search(content):
+                    no_pool_files.append(rel)
 
         # N+1 detection — indent-aware for Python, brace-aware for JS
         if lang == "python":
@@ -785,7 +1084,7 @@ def _c5_api_design(root: str, files: list[str], lang: str) -> tuple[int, list[st
                 has_schema = True
             if pat["python"]["pagination"].search(content):
                 has_pagination = True
-        else:
+        elif lang == "js":
             for m in pat["js"]["route"].finditer(content):
                 routes.append(m.group(1))
             # Next.js file-based routes
@@ -799,6 +1098,15 @@ def _c5_api_design(root: str, files: list[str], lang: str) -> tuple[int, list[st
             if pat["js"]["schema"].search(content):
                 has_schema = True
             if pat["js"]["pagination"].search(content):
+                has_pagination = True
+        elif lang in pat:
+            lang_pat = pat[lang]
+            for m in lang_pat["route"].finditer(content):
+                grp = m.group(1) if m.lastindex and m.group(1) else m.group(0)
+                routes.append(grp)
+            if lang_pat.get("schema") and lang_pat["schema"].search(content):
+                has_schema = True
+            if lang_pat.get("pagination") and lang_pat["pagination"].search(content):
                 has_pagination = True
 
     if not routes:
@@ -873,7 +1181,7 @@ def _c6_resource_management(
                 ):
                     bare_open += 1
 
-        else:  # js
+        elif lang == "js":
             if pat["js"]["timeout"].search(content):
                 has_timeout = True
             if has_resource and not pat["js"]["cleanup"].search(content):
@@ -888,6 +1196,22 @@ def _c6_resource_management(
                         and "signal" not in block
                     ):
                         http_no_timeout += 1
+        elif lang in pat:
+            lang_pat = pat[lang]
+            if lang_pat.get("timeout") and lang_pat["timeout"].search(content):
+                has_timeout = True
+            if (
+                has_resource
+                and lang_pat.get("cleanup")
+                and not lang_pat["cleanup"].search(content)
+            ):
+                no_cleanup += 1
+            if lang_pat.get("http_call"):
+                for i, line in enumerate(lines):
+                    if lang_pat["http_call"].search(line):
+                        block = "\n".join(lines[i : i + 6])
+                        if "timeout" not in block.lower():
+                            http_no_timeout += 1
 
     if no_cleanup > 3:
         evidence.append(f"{no_cleanup} files open resources without visible cleanup")
@@ -1294,7 +1618,7 @@ def _c10_tech_debt(root: str, files: list[str], lang: str) -> tuple[int, list[st
             for m in pat["python"]["long_params"].finditer(content):
                 if _count_params(m.group(1), is_python=True) >= 6:
                     long_param_funcs += 1
-        else:
+        elif lang == "js":
             for m in pat["js"]["long_params"].finditer(content):
                 params_str = m.group(1) or m.group(2) or ""
                 if _count_params(params_str) >= 6:
@@ -1302,6 +1626,18 @@ def _c10_tech_debt(root: str, files: list[str], lang: str) -> tuple[int, list[st
             loose = pat["js"]["loose_eq"].findall(content)
             if len(loose) > 3:
                 loose_eq += len(loose)
+        elif lang == "go" and "go" in pat:
+            hits = pat["go"]["interface_any"].findall(content)
+            if len(hits) > 5:
+                any_type += len(hits)
+        elif lang == "java" and "java" in pat:
+            hits = pat["java"]["raw_types"].findall(content)
+            if len(hits) > 3:
+                any_type += len(hits)
+        elif lang == "dotnet" and "dotnet" in pat:
+            hits = pat["dotnet"]["dynamic_type"].findall(content)
+            if len(hits) > 3:
+                any_type += len(hits)
 
         if ext in {".ts", ".tsx"}:
             hits = pat["ts"]["any_type"].findall(content)
@@ -1661,16 +1997,8 @@ def _check_repo(
             f"    Detected language: {lang} | {len(all_source)} source files found"
         )
 
-    files_before = len(all_source)
-    source_files = _filter_non_turing_files(root, all_source, verbose_log)
-    result["files_excluded_turing"] = files_before - len(source_files)
+    source_files = all_source
     result["files_analyzed"] = len(source_files)
-
-    if not source_files:
-        result["error"] = "all files turing-authored"
-        if owns_clone:
-            shutil.rmtree(clone_dir, ignore_errors=True)
-        return result
 
     # Run all 10 static checks
     s1, e1 = _c1_error_handling(root, source_files, lang)

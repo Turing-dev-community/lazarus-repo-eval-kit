@@ -12,9 +12,28 @@ from eval_kit.llm_client import call_llm
 # Constants
 # ---------------------------------------------------------------------------
 
-JS_EXTS = [".ts", ".tsx", ".js", ".jsx"]
+JS_EXTS = [".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]
 PY_EXTS = [".py"]
-ALL_SOURCE_EXTS = JS_EXTS + PY_EXTS
+GO_EXTS = [".go"]
+RUBY_EXTS = [".rb"]
+RUST_EXTS = [".rs"]
+PHP_EXTS = [".php"]
+JAVA_EXTS = [".java", ".kt", ".scala", ".groovy"]
+DOTNET_EXTS = [".cs", ".fs", ".vb"]
+CPP_EXTS = [".c", ".cpp", ".cc", ".h", ".hpp"]
+COBOL_EXTS = [".cob", ".cbl", ".cobol"]
+ALL_SOURCE_EXTS = (
+    JS_EXTS
+    + PY_EXTS
+    + GO_EXTS
+    + RUBY_EXTS
+    + RUST_EXTS
+    + PHP_EXTS
+    + JAVA_EXTS
+    + DOTNET_EXTS
+    + CPP_EXTS
+    + COBOL_EXTS
+)
 
 EXCLUDE_DIRS = {
     "node_modules",
@@ -113,10 +132,20 @@ def _is_test(path: str, root: str) -> bool:
 
 
 def _detect_language(files: list[str]) -> str:
-    """Return dominant language: 'python' or 'js'."""
-    py = sum(1 for f in files if os.path.splitext(f)[1] in PY_EXTS)
-    js = sum(1 for f in files if os.path.splitext(f)[1] in JS_EXTS)
-    return "python" if py >= js else "js"
+    """Return dominant language based on file extension counts."""
+    counts = {
+        "python": sum(1 for f in files if os.path.splitext(f)[1] in PY_EXTS),
+        "js": sum(1 for f in files if os.path.splitext(f)[1] in JS_EXTS),
+        "go": sum(1 for f in files if os.path.splitext(f)[1] in GO_EXTS),
+        "ruby": sum(1 for f in files if os.path.splitext(f)[1] in RUBY_EXTS),
+        "rust": sum(1 for f in files if os.path.splitext(f)[1] in RUST_EXTS),
+        "php": sum(1 for f in files if os.path.splitext(f)[1] in PHP_EXTS),
+        "java": sum(1 for f in files if os.path.splitext(f)[1] in JAVA_EXTS),
+        "dotnet": sum(1 for f in files if os.path.splitext(f)[1] in DOTNET_EXTS),
+        "cpp": sum(1 for f in files if os.path.splitext(f)[1] in CPP_EXTS),
+        "cobol": sum(1 for f in files if os.path.splitext(f)[1] in COBOL_EXTS),
+    }
+    return max(counts, key=counts.get)
 
 
 # ---------------------------------------------------------------------------
@@ -292,6 +321,51 @@ def _criterion_documentation(root: str, lang: str) -> tuple[int, list[str]]:
                             f"Boilerplate placeholder in {_rel(cf, root)}: '{bp}'"
                         )
                         score = max(score, 3)
+    elif lang == "java":
+        for cfg in ("pom.xml", "build.gradle", "build.gradle.kts"):
+            cf = os.path.join(root, cfg)
+            if os.path.exists(cf):
+                content = _read(cf)
+                for bp in ["todo: add description", "my project", "example artifact"]:
+                    if bp.lower() in content.lower():
+                        evidence.append(
+                            f"Boilerplate placeholder in {_rel(cf, root)}: '{bp}'"
+                        )
+                        score = max(score, 3)
+    elif lang == "dotnet":
+        for cf in _find_files(root, [".csproj", ".sln"]):
+            content = _read(cf)
+            for bp in ["todo: add description", "my project", "example"]:
+                if bp.lower() in content.lower():
+                    evidence.append(
+                        f"Boilerplate placeholder in {_rel(cf, root)}: '{bp}'"
+                    )
+                    score = max(score, 3)
+    elif lang == "go":
+        mod = os.path.join(root, "go.mod")
+        if os.path.exists(mod):
+            content = _read(mod)
+            if "example.com" in content or "module main" in content:
+                evidence.append(
+                    "go.mod uses placeholder module path (example.com or 'main')"
+                )
+                score = max(score, 3)
+    elif lang == "rust":
+        toml = os.path.join(root, "Cargo.toml")
+        if os.path.exists(toml):
+            content = _read(toml)
+            for bp in ['description = ""', "todo: add description", "A Rust project"]:
+                if bp.lower() in content.lower():
+                    evidence.append(f"Boilerplate placeholder in Cargo.toml: '{bp}'")
+                    score = max(score, 3)
+    elif lang == "php":
+        composer = os.path.join(root, "composer.json")
+        if os.path.exists(composer):
+            content = _read(composer)
+            for bp in ["todo: add description", "my project", "example"]:
+                if bp.lower() in content.lower():
+                    evidence.append(f"Boilerplate placeholder in composer.json: '{bp}'")
+                    score = max(score, 3)
 
     if emoji_heavy >= 1:
         score = max(score, 4)
@@ -397,6 +471,75 @@ def _criterion_comments(
         if docstring_heavy > 5:
             evidence.append(
                 f"{docstring_heavy} Python files have docstrings on every function: {', '.join(ds_examples)}"
+            )
+            score = max(score, 3)
+    elif lang == "java":
+        javadoc_heavy = 0
+        jd_examples: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] in (".java", ".kt")]:
+            content = _read(f)
+            methods = len(
+                re.findall(r"(?:public|private|protected)\s+\w+\s+\w+\s*\(", content)
+            )
+            javadocs = len(re.findall(r"/\*\*[\s\S]*?\*/", content))
+            if methods >= 4 and javadocs >= methods * 0.9:
+                javadoc_heavy += 1
+                if len(jd_examples) < 5:
+                    jd_examples.append(_rel(f, root))
+        if javadoc_heavy > 3:
+            evidence.append(
+                f"{javadoc_heavy} Java/Kotlin files have Javadoc on every method: {', '.join(jd_examples)}"
+            )
+            score = max(score, 3)
+    elif lang == "go":
+        godoc_heavy = 0
+        gd_examples: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".go"]:
+            content = _read(f)
+            funcs = len(re.findall(r"^func\s+", content, re.M))
+            # Go doc comments start with // FuncName
+            godocs = len(re.findall(r"^// [A-Z]\w+", content, re.M))
+            if funcs >= 4 and godocs >= funcs * 0.9:
+                godoc_heavy += 1
+                if len(gd_examples) < 5:
+                    gd_examples.append(_rel(f, root))
+        if godoc_heavy > 5:
+            evidence.append(
+                f"{godoc_heavy} Go files have GoDoc on every exported function: {', '.join(gd_examples)}"
+            )
+            score = max(score, 3)
+    elif lang == "rust":
+        rustdoc_heavy = 0
+        rd_examples: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".rs"]:
+            content = _read(f)
+            funcs = len(re.findall(r"^(?:pub\s+)?fn\s+", content, re.M))
+            rustdocs = len(re.findall(r"^///", content, re.M))
+            if funcs >= 4 and rustdocs >= funcs * 2:
+                rustdoc_heavy += 1
+                if len(rd_examples) < 5:
+                    rd_examples.append(_rel(f, root))
+        if rustdoc_heavy > 3:
+            evidence.append(
+                f"{rustdoc_heavy} Rust files have doc comments on every function: {', '.join(rd_examples)}"
+            )
+            score = max(score, 3)
+    elif lang == "dotnet":
+        xmldoc_heavy = 0
+        xd_examples: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".cs"]:
+            content = _read(f)
+            methods = len(
+                re.findall(r"(?:public|private|protected)\s+\w+\s+\w+\s*\(", content)
+            )
+            xmldocs = len(re.findall(r"^\s*///", content, re.M))
+            if methods >= 4 and xmldocs >= methods * 3:
+                xmldoc_heavy += 1
+                if len(xd_examples) < 5:
+                    xd_examples.append(_rel(f, root))
+        if xmldoc_heavy > 3:
+            evidence.append(
+                f"{xmldoc_heavy} C# files have XML doc comments on every method: {', '.join(xd_examples)}"
             )
             score = max(score, 3)
 
@@ -520,6 +663,187 @@ def _criterion_naming(root: str, lang: str, files: list[str]) -> tuple[int, list
             evidence.append(f"Numbered class names: {', '.join(numbered[:5])}")
             score = max(score, 3)
 
+    elif lang == "java":
+        class_names: list[str] = []
+        method_names: list[str] = []
+        for f in [
+            f for f in files if os.path.splitext(f)[1] in (".java", ".kt", ".scala")
+        ]:
+            content = _read(f)
+            class_names.extend(re.findall(r"(?:class|interface|enum)\s+(\w+)", content))
+            method_names.extend(
+                re.findall(r"(?:public|private|protected)\s+\w+\s+(\w+)\s*\(", content)
+            )
+        ai_suffixes = [
+            "Manager",
+            "Handler",
+            "Processor",
+            "Helper",
+            "Utility",
+            "Factory",
+            "Builder",
+            "Service",
+            "Repository",
+            "Impl",
+        ]
+        total = len(class_names) + len(method_names)
+        if total > 10:
+            generic = sum(
+                1 for n in class_names if any(n.endswith(s) for s in ai_suffixes)
+            )
+            generic_pct = (generic / total) * 100
+            if generic_pct > 60:
+                evidence.append(
+                    f"{generic_pct:.0f}% of Java classes use generic AI suffixes (Manager/Handler/Factory/Impl)"
+                )
+                score = max(score, 4)
+            elif generic_pct > 40:
+                evidence.append(
+                    f"{generic_pct:.0f}% of Java classes use generic AI suffixes"
+                )
+                score = max(score, 3)
+        numbered = [n for n in class_names if re.match(r"^[A-Z]\w+\d+$", n)]
+        if len(numbered) >= 3:
+            evidence.append(f"Numbered class names: {', '.join(numbered[:5])}")
+            score = max(score, 3)
+
+    elif lang == "go":
+        func_names: list[str] = []
+        type_names: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".go"]:
+            content = _read(f)
+            func_names.extend(
+                re.findall(r"^func\s+(?:\([^)]+\)\s+)?(\w+)", content, re.M)
+            )
+            type_names.extend(
+                re.findall(r"^type\s+(\w+)\s+(?:struct|interface)", content, re.M)
+            )
+        ai_suffixes = ["Manager", "Handler", "Processor", "Helper", "Service"]
+        total = len(func_names) + len(type_names)
+        if total > 10:
+            generic = sum(
+                1 for n in type_names if any(n.endswith(s) for s in ai_suffixes)
+            )
+            generic_pct = (generic / total) * 100
+            if generic_pct > 40:
+                evidence.append(
+                    f"{generic_pct:.0f}% of Go types use generic AI suffixes (Manager/Handler/Service)"
+                )
+                score = max(score, 3)
+
+    elif lang == "rust":
+        struct_names: list[str] = []
+        fn_names: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".rs"]:
+            content = _read(f)
+            struct_names.extend(re.findall(r"(?:struct|enum|trait)\s+(\w+)", content))
+            fn_names.extend(re.findall(r"^(?:pub\s+)?fn\s+(\w+)", content, re.M))
+        ai_suffixes = ["Manager", "Handler", "Processor", "Helper", "Util"]
+        ai_prefixes = ["handle_", "process_", "do_", "run_", "execute_"]
+        total = len(struct_names) + len(fn_names)
+        if total > 10:
+            generic = sum(
+                1 for n in struct_names if any(n.endswith(s) for s in ai_suffixes)
+            )
+            generic += sum(
+                1 for n in fn_names if any(n.startswith(p) for p in ai_prefixes)
+            )
+            generic_pct = (generic / total) * 100
+            if generic_pct > 40:
+                evidence.append(
+                    f"{generic_pct:.0f}% of Rust names use generic AI patterns"
+                )
+                score = max(score, 3)
+
+    elif lang == "dotnet":
+        class_names: list[str] = []
+        method_names: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] in (".cs", ".fs")]:
+            content = _read(f)
+            class_names.extend(re.findall(r"(?:class|interface|enum)\s+(\w+)", content))
+            method_names.extend(
+                re.findall(r"(?:public|private|protected)\s+\w+\s+(\w+)\s*\(", content)
+            )
+        # I-prefix on everything is an AI pattern
+        i_interfaces = [n for n in class_names if re.match(r"^I[A-Z]", n)]
+        if len(i_interfaces) > len(class_names) * 0.5 and len(class_names) > 5:
+            evidence.append(
+                f"{len(i_interfaces)}/{len(class_names)} classes are I-prefixed interfaces (over-abstraction)"
+            )
+            score = max(score, 3)
+        ai_suffixes = [
+            "Manager",
+            "Handler",
+            "Processor",
+            "Helper",
+            "Service",
+            "Repository",
+            "Factory",
+            "Base",
+            "Abstract",
+        ]
+        total = len(class_names) + len(method_names)
+        if total > 10:
+            generic = sum(
+                1 for n in class_names if any(n.endswith(s) for s in ai_suffixes)
+            )
+            generic_pct = (generic / total) * 100
+            if generic_pct > 50:
+                evidence.append(
+                    f"{generic_pct:.0f}% of .NET classes use generic AI suffixes"
+                )
+                score = max(score, 3)
+
+    elif lang == "php":
+        class_names: list[str] = []
+        func_names: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".php"]:
+            content = _read(f)
+            class_names.extend(re.findall(r"class\s+(\w+)", content))
+            func_names.extend(
+                re.findall(r"(?:public|private|protected)?\s*function\s+(\w+)", content)
+            )
+        ai_suffixes = [
+            "Manager",
+            "Handler",
+            "Processor",
+            "Helper",
+            "Utility",
+            "Factory",
+            "Service",
+        ]
+        total = len(class_names) + len(func_names)
+        if total > 10:
+            generic = sum(
+                1 for n in class_names if any(n.endswith(s) for s in ai_suffixes)
+            )
+            generic_pct = (generic / total) * 100
+            if generic_pct > 50:
+                evidence.append(
+                    f"{generic_pct:.0f}% of PHP classes use generic AI suffixes"
+                )
+                score = max(score, 3)
+
+    elif lang == "ruby":
+        class_names: list[str] = []
+        method_names: list[str] = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".rb"]:
+            content = _read(f)
+            class_names.extend(re.findall(r"class\s+(\w+)", content))
+            method_names.extend(re.findall(r"def\s+(\w+)", content))
+        ai_prefixes = ["handle_", "process_", "do_", "run_", "execute_", "perform_"]
+        total = len(class_names) + len(method_names)
+        if total > 10:
+            generic = sum(
+                1 for n in method_names if any(n.startswith(p) for p in ai_prefixes)
+            )
+            generic_pct = (generic / total) * 100
+            if generic_pct > 40:
+                evidence.append(
+                    f"{generic_pct:.0f}% of Ruby methods use generic AI prefixes"
+                )
+                score = max(score, 3)
+
     return score, evidence
 
 
@@ -614,6 +938,94 @@ def _criterion_error_handling(
                 f"{pass_count} `except: pass` blocks: {', '.join(pass_examples)}"
             )
             score = max(score, 4)
+
+    elif lang == "java":
+        broad_catch_files = []
+        print_stack_files = []
+        for f in [f for f in files if os.path.splitext(f)[1] in (".java", ".kt")]:
+            content = _read(f)
+            rel = _rel(f, root)
+            if re.search(r"catch\s*\(\s*Exception\s+\w+\s*\)", content):
+                broad_catch_files.append(rel)
+            if re.search(r"\.printStackTrace\(\)", content):
+                print_stack_files.append(rel)
+        if len(broad_catch_files) >= 3:
+            evidence.append(
+                f"Broad `catch (Exception)` in {len(broad_catch_files)} Java files: {', '.join(broad_catch_files[:5])}"
+            )
+            score = max(score, 3)
+        if len(print_stack_files) >= 3:
+            evidence.append(
+                f"`printStackTrace()` in {len(print_stack_files)} Java files (no structured logging): {', '.join(print_stack_files[:5])}"
+            )
+            score = max(score, 4)
+
+    elif lang == "go":
+        ignored_errors = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".go"]:
+            content = _read(f)
+            rel = _rel(f, root)
+            # `_ = someFunc()` pattern ignoring returned errors
+            if len(re.findall(r"\b_\s*(?:,\s*_)?\s*=\s*\w+\(", content)) >= 3:
+                ignored_errors.append(rel)
+        if len(ignored_errors) >= 3:
+            evidence.append(
+                f"Error values discarded with `_` in {len(ignored_errors)} Go files: {', '.join(ignored_errors[:5])}"
+            )
+            score = max(score, 4)
+
+    elif lang == "rust":
+        unwrap_files = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".rs"]:
+            content = _read(f)
+            rel = _rel(f, root)
+            unwrap_count = len(re.findall(r"\.unwrap\(\)", content))
+            if unwrap_count >= 5:
+                unwrap_files.append(f"{rel} ({unwrap_count}×)")
+        if len(unwrap_files) >= 3:
+            evidence.append(
+                f"Excessive `.unwrap()` calls (no error propagation) in: {', '.join(unwrap_files[:5])}"
+            )
+            score = max(score, 4)
+
+    elif lang == "php":
+        empty_catch_files = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".php"]:
+            content = _read(f)
+            rel = _rel(f, root)
+            if re.findall(r"catch\s*\([^)]*\)\s*\{\s*\}", content):
+                empty_catch_files.append(rel)
+        if len(empty_catch_files) >= 3:
+            evidence.append(
+                f"Empty catch blocks in {len(empty_catch_files)} PHP files: {', '.join(empty_catch_files[:5])}"
+            )
+            score = max(score, 3)
+
+    elif lang == "ruby":
+        bare_rescue_files = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".rb"]:
+            content = _read(f)
+            rel = _rel(f, root)
+            if re.findall(r"\brescue\s+Exception\b", content):
+                bare_rescue_files.append(rel)
+        if len(bare_rescue_files) >= 3:
+            evidence.append(
+                f"Broad `rescue Exception` in {len(bare_rescue_files)} Ruby files: {', '.join(bare_rescue_files[:5])}"
+            )
+            score = max(score, 3)
+
+    elif lang == "dotnet":
+        broad_catch_files = []
+        for f in [f for f in files if os.path.splitext(f)[1] == ".cs"]:
+            content = _read(f)
+            rel = _rel(f, root)
+            if re.search(r"catch\s*\(\s*Exception\s+\w+\s*\)", content):
+                broad_catch_files.append(rel)
+        if len(broad_catch_files) >= 3:
+            evidence.append(
+                f"Broad `catch (Exception)` in {len(broad_catch_files)} C# files: {', '.join(broad_catch_files[:5])}"
+            )
+            score = max(score, 3)
 
     return score, evidence
 
@@ -746,6 +1158,35 @@ def _criterion_dead_code(
                 )
             )
             ph += len(re.findall(r"(?://|/\*)\s*TODO:?\s*implement", content, re.I))
+        if ext in JAVA_EXTS:
+            ph += len(
+                re.findall(r"throw\s+new\s+UnsupportedOperationException", content)
+            )
+            ph += len(re.findall(r"//\s*TODO:?\s*implement", content, re.I))
+        if ext in GO_EXTS:
+            ph += len(re.findall(r"panic\(\"not implemented\"\)", content, re.I))
+            ph += len(re.findall(r"//\s*TODO:?\s*implement", content, re.I))
+        if ext in RUST_EXTS:
+            ph += len(re.findall(r"\btodo!\(\)", content))
+            ph += len(re.findall(r"\bunimplemented!\(\)", content))
+        if ext in DOTNET_EXTS:
+            ph += len(re.findall(r"throw\s+new\s+NotImplementedException", content))
+            ph += len(re.findall(r"//\s*TODO:?\s*implement", content, re.I))
+        if ext in PHP_EXTS:
+            ph += len(
+                re.findall(
+                    r"throw\s+new\s+(?:\\?BadMethodCallException|\\?RuntimeException)\(['\"]not implemented",
+                    content,
+                    re.I,
+                )
+            )
+            ph += len(re.findall(r"//\s*TODO:?\s*implement", content, re.I))
+        if ext in RUBY_EXTS:
+            ph += len(
+                re.findall(
+                    r"raise\s+(?:NotImplementedError|'Not implemented')", content
+                )
+            )
         if ph > 0:
             placeholder_count += ph
             if len(placeholder_examples) < 5:
@@ -802,6 +1243,16 @@ def _criterion_dead_code(
         "pytest",
         "unittest",
         "org.junit",
+        "rspec",
+        "minitest",
+        "#[test]",
+        "testing.T",
+        "phpunit",
+        "gtest",
+        "catch2",
+        "NUnit",
+        "xUnit",
+        "MSTest",
     ]
 
     fake_tests = 0
@@ -813,7 +1264,10 @@ def _criterion_dead_code(
         src_imports = [i for i in imports if not any(x in i for x in test_lib_pats)]
         has_assertions = bool(
             re.search(
-                r"(expect\(|assert |self\.assert|assertEquals|assertTrue)", content
+                r"(expect\(|assert |self\.assert|assertEquals|assertTrue|"
+                r"assert_eq!|assert!|Should\.|\.Should\b|assertThat|"
+                r"it\(|specify\b|context\b)",
+                content,
             )
         )
         if not src_imports and has_assertions:
