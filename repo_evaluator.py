@@ -129,14 +129,14 @@ def _safe_div(n: float, d: float) -> float:
 
 
 def _is_rubric_accepted(rubric_scores: dict) -> bool:
-    """A PR passes the rubric gate if it has <=1 score of 3 and <=2 scores of 2."""
+    """A PR passes the rubric gate if it has 0 scores of 3 and <=2 scores of 2."""
     scores = [
         block.get("score")
         for block in rubric_scores.values()
         if isinstance(block, dict) and block.get("score") is not None
     ]
     return (
-        sum(1 for s in scores if int(s) == 3) <= 1
+        sum(1 for s in scores if int(s) == 3) == 0
         and sum(1 for s in scores if int(s) == 2) <= 2
     )
 
