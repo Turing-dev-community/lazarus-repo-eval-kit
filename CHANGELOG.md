@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.4.0...v0.4.1) (2026-05-04)
+
+
+### Bug Fixes
+
+* Disallow score of 3 in rubric gate ([5aa2052](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/5aa2052cfa2a72dcc8905b92b44da6d6dee96a5a))
+
 ## [0.4.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.3.0...v0.4.0) (2026-04-30)
 
 
