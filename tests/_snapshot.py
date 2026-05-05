@@ -16,6 +16,7 @@ VOLATILE_KEYS: frozenset[str] = frozenset(
         "repo_path",  # absolute path differs per machine
         "output_path",
         "csv_path",
+        "eval_kit_version",  # changes every release; tested separately
     }
 )
 
