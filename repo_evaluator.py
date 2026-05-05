@@ -111,6 +111,8 @@ from eval_kit.taxonomy_check import run_taxonomy_for_accepted_prs
 from eval_kit.test_runners import F2PP2PAnalyzer, get_runner, preflight_check
 from eval_kit.usage_tracker import CostLimitAborted, get_tracker
 
+EVAL_KIT_VERSION = (Path(__file__).parent / "version.txt").read_text().strip()
+
 if not os.environ.get("REPO_EVAL_SKIP_DOTENV"):
     load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=False)
 
@@ -3581,6 +3583,7 @@ def to_json(report: AnalysisReport) -> dict:
         repo_metrics_out["enterprise_signals"] = report.repo_metrics.enterprise_signals
 
     result = {
+        "eval_kit_version": EVAL_KIT_VERSION,
         "repo_name": report.repo_name,
         "repo_full_name": report.repo_full_name,
         # 'overall_score': report.overall_score,
