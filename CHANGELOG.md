@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.4.1...v0.5.0) (2026-05-06)
+
+
+### Features
+
+* Add version to JSON/CSV output ([037e148](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/037e148e93a034707034fc3ec5c1defb4a3cdf23))
+
 ## [0.4.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.4.0...v0.4.1) (2026-05-04)
 
 
