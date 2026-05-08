@@ -46,6 +46,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from dotenv import load_dotenv
 
+from eval_kit.cache import EvalCache
 from eval_kit.constants import (
     AI_MARKER_PATTERNS,
     DATA_FILE_EXTENSIONS,
@@ -2122,6 +2123,7 @@ class PRAnalyzer:
         max_non_test_files: int = MAX_NON_TEST_FILES,
         min_code_changes: int = MIN_PR_CODE_CHANGES,
         start_date: Optional[datetime] = None,
+        cache=None,
     ):
         self.platform_client = platform_client
         self.owner = platform_client.owner
@@ -2133,6 +2135,9 @@ class PRAnalyzer:
         self.max_non_test_files = max_non_test_files
         self.min_code_changes = min_code_changes
         self.start_date = start_date
+
+        self.cache = cache if cache is not None else EvalCache(enabled=False)
+        self._platform = type(platform_client).__name__.replace("Client", "").lower()
 
     def _commit_exists(self, sha: str) -> bool:
         """Check if a commit exists in the local repo."""
@@ -2231,8 +2236,6 @@ class PRAnalyzer:
         self, base_sha: str, head_sha: str, pr_number: Optional[int] = None
     ) -> Optional[str]:
         """Get patch/diff between two commits, with API fallback."""
-        patch = None
-
         # Try local git first
         try:
             self._ensure_commits_for_patch(base_sha, head_sha, pr_number)
@@ -2269,29 +2272,50 @@ class PRAnalyzer:
             head_sha[:8],
             f" #{pr_number}" if pr_number else "",
         )
-        try:
-            patch = get_full_patch_content(
-                self.repo_full_name,
-                base_sha,
-                head_sha,
-                token=self.platform_client.token,
-                platform_client=self.platform_client,
-            )
-            if patch:
-                logger.debug("Successfully retrieved patch from API")
-            else:
-                logger.warning(
-                    "API returned no patch for %s...%s. "
-                    "Pass --token if unauthenticated requests fail; for --repo-path use a "
-                    "full clone or a remote 'origin' that matches %s.",
-                    base_sha[:8],
-                    head_sha[:8],
+        if pr_number is None:
+            try:
+                return get_full_patch_content(
                     self.repo_full_name,
+                    base_sha,
+                    head_sha,
+                    token=self.platform_client.token,
+                    platform_client=self.platform_client,
                 )
-            return patch
-        except Exception as e:
-            logger.warning("API patch retrieval failed: %s", e)
-            return None
+            except Exception as e:
+                logger.warning("API patch retrieval failed: %s", e)
+                return None
+
+        def _fetch_patch() -> Optional[str]:
+            try:
+                result = get_full_patch_content(
+                    self.repo_full_name,
+                    base_sha,
+                    head_sha,
+                    token=self.platform_client.token,
+                    platform_client=self.platform_client,
+                )
+                if result:
+                    logger.debug("Successfully retrieved patch from API")
+                else:
+                    logger.warning(
+                        "API returned no patch for %s...%s. "
+                        "Pass --token if unauthenticated requests fail; for --repo-path use a "
+                        "full clone or a remote 'origin' that matches %s.",
+                        base_sha[:8],
+                        head_sha[:8],
+                        self.repo_full_name,
+                    )
+                return result
+            except Exception as e:
+                logger.warning("API patch retrieval failed: %s", e)
+                return None
+
+        return self.cache.get_or_compute(
+            self.cache.pr_patch_key(
+                self._platform, self.owner, self.repo_name, pr_number
+            ),
+            _fetch_patch,
+        )
 
     def analyze_prs(
         self,
@@ -2324,9 +2348,17 @@ class PRAnalyzer:
 
         while True:
             try:
-                res = self.platform_client.fetch_prs(
-                    cursor, page_size=50, start_date=self.start_date
+                _sd = self.start_date.isoformat() if self.start_date else None
+                _page_key = self.cache.pr_page_key(
+                    self._platform, self.owner, self.repo_name, cursor, 50, _sd
                 )
+                res = self.cache.get(_page_key)
+                if res is None:
+                    res = self.platform_client.fetch_prs(
+                        cursor, page_size=50, start_date=self.start_date
+                    )
+                    if not res.get("errors"):
+                        self.cache.set(_page_key, res)
 
                 if res.get("errors"):
                     error_msg = res["errors"][0]["message"]
@@ -2658,7 +2690,15 @@ class PRAnalyzer:
                                 repo_path=self.repo_path,
                                 primary_language=language_name,
                             )
-                            _signals = collect_for_pr(_pr_ctx, _pr_collectors)
+                            _signals = self.cache.get_or_compute(
+                                self.cache.enterprise_pr_key(
+                                    self._platform,
+                                    self.owner,
+                                    self.repo_name,
+                                    pr_data["number"],
+                                ),
+                                lambda: collect_for_pr(_pr_ctx, _pr_collectors),
+                            )
                             if _signals:
                                 pr_data["enterprise_signals"] = _signals
                         pr_data.pop("__full_patch", None)
@@ -2796,6 +2836,7 @@ class RepoEvaluator:
         f2p_timeout: int = 600,
         pr_number: Optional[int] = None,
         skip_pr_rubrics: bool = False,
+        cache=None,
     ):
         self.repo_path = repo_path
         self.owner = owner
@@ -2814,6 +2855,31 @@ class RepoEvaluator:
         self.language_config = load_language_config()
         self.skip_pr_rubrics = skip_pr_rubrics
 
+        self.cache = cache if cache is not None else EvalCache(enabled=False)
+        self._platform = type(platform_client).__name__.replace("Client", "").lower()
+
+    def _compute_repo_metrics(self) -> dict:
+        """Compute repo metrics and repo-level enterprise signals. Returns plain dict for caching."""
+        repo_analyzer = RepoAnalyzer(
+            repo_path=self.repo_path,
+            owner=self.owner,
+            repo_name=self.repo_name,
+            platform_client=self.platform_client,
+        )
+        metrics = repo_analyzer.analyze()
+        collectors = get_repo_collectors()
+        if collectors:
+            ctx = RepoContext(
+                repo_path=Path(self.repo_path),
+                owner=self.owner,
+                repo_name=self.repo_name,
+                primary_language=metrics.primary_language,
+            )
+            signals = collect_for_repo(ctx, collectors)
+            if signals:
+                metrics.enterprise_signals = signals
+        return asdict(metrics)
+
     def evaluate(self) -> AnalysisReport:
         if not self.platform_client:
             raise ValueError("Platform client is required")
@@ -2824,25 +2890,19 @@ class RepoEvaluator:
 
         logger.info(f"Evaluating repository: {self.repo_full_name}")
 
+        # repo_analyzer is kept in scope for later use in health checks (_get_all_files,
+        # _analyze_git_history). The expensive .analyze() call is inside _compute_repo_metrics.
         repo_analyzer = RepoAnalyzer(
             repo_path=self.repo_path,
             owner=self.owner,
             repo_name=self.repo_name,
             platform_client=self.platform_client,
         )
-        repo_metrics = repo_analyzer.analyze()
-
-        _repo_collectors = get_repo_collectors()
-        if _repo_collectors:
-            _repo_ctx = RepoContext(
-                repo_path=Path(self.repo_path),
-                owner=self.owner,
-                repo_name=self.repo_name,
-                primary_language=repo_metrics.primary_language,
-            )
-            _repo_signals = collect_for_repo(_repo_ctx, _repo_collectors)
-            if _repo_signals:
-                repo_metrics.enterprise_signals = _repo_signals
+        _metrics_dict = self.cache.get_or_compute(
+            self.cache.repo_key(self._platform, self.owner, self.repo_name),
+            self._compute_repo_metrics,
+        )
+        repo_metrics = RepoMetrics(**_metrics_dict)
 
         primary_language = repo_metrics.primary_language
         if primary_language in ["Vue", "React"]:
@@ -2863,6 +2923,7 @@ class RepoEvaluator:
             max_non_test_files=self.max_non_test_files,
             min_code_changes=self.min_code_changes,
             start_date=self.start_date,
+            cache=self.cache,
         )
 
         cumulative_stats: Optional[PRRejectionStats] = None
@@ -3159,31 +3220,51 @@ class RepoEvaluator:
                 language_hint=primary_language,
             )
             pr_files = [f["path"] for f in pr.get("files", {}).get("nodes", [])]
-            result = analyzer.analyze(
-                pr_number=pr_number,
-                pr_title=pr.get("title", ""),
-                base_sha=pr.get("baseRefOid", ""),
-                head_sha=pr.get("headRefOid", ""),
-                pr_files=pr_files,
-                single_pr_mode=self.pr_number is not None,
+            _base_sha = pr.get("baseRefOid", "")
+            _head_sha = pr.get("headRefOid", "")
+            _result_dict = self.cache.get_or_compute(
+                self.cache.f2p_key(
+                    self._platform,
+                    self.owner,
+                    self.repo_name,
+                    pr_number,
+                    _base_sha,
+                    _head_sha,
+                ),
+                lambda: analyzer.analyze(
+                    pr_number=pr_number,
+                    pr_title=pr.get("title", ""),
+                    base_sha=_base_sha,
+                    head_sha=_head_sha,
+                    pr_files=pr_files,
+                    single_pr_mode=self.pr_number is not None,
+                ).to_dict(),
             )
 
-            f2p_results.append(result.to_dict())
+            f2p_results.append(_result_dict)
 
-            if result.success and result.has_valid_f2p and result.has_valid_p2p:
+            if (
+                _result_dict.get("success")
+                and _result_dict.get("has_valid_f2p")
+                and _result_dict.get("has_valid_p2p")
+            ):
                 logger.info(
-                    f"PR #{pr_number}: ✅ VALID (F2P: {len(result.f2p_tests)}, P2P: {len(result.p2p_tests)})"
+                    f"PR #{pr_number}: ✅ VALID (F2P: {len(_result_dict.get('f2p_tests', []))}, P2P: {len(_result_dict.get('p2p_tests', []))})"
                 )
-                pr["f2p_result"] = result.to_dict()
+                pr["f2p_result"] = _result_dict
                 f2p_validated_prs.append(pr)
             else:
-                reason = result.rejection_reason or result.error_code or "f2p_invalid"
+                reason = (
+                    _result_dict.get("rejection_reason")
+                    or _result_dict.get("error_code")
+                    or "f2p_invalid"
+                )
                 if reason == "empty_p2p":
                     message = "No P2P tests found"
                 elif reason == "empty_f2p":
                     message = "No F2P tests found"
                 else:
-                    message = result.error or "Invalid F2P/P2P"
+                    message = _result_dict.get("error") or "Invalid F2P/P2P"
                 logger.info(f"PR #{pr_number}: ❌ REJECTED - {reason}: {message}")
                 f2p_rejection_reasons[reason] = f2p_rejection_reasons.get(reason, 0) + 1
 
@@ -3242,6 +3323,7 @@ class RepoEvaluator:
             max_non_test_files=self.max_non_test_files,
             min_code_changes=self.min_code_changes,
             start_date=self.start_date,
+            cache=self.cache,
         )
         qe = QualityEvaluator()
         results: List[dict] = []
@@ -3257,64 +3339,76 @@ class RepoEvaluator:
                 self.repo_name,
                 pr_number,
             )
-            entry: dict = {
-                "number": pr_number,
-                "url": pr.get("url", ""),
-            }
             base_sha = pr.get("baseRefOid", "") or ""
             head_sha = pr.get("headRefOid", "") or ""
-            if not base_sha or not head_sha:
-                entry["error"] = "missing base or head SHA"
-                results.append(entry)
-                continue
-
-            full_patch = pr_analyzer._get_patch_from_git(
-                base_sha, head_sha, pr_number=pr_number
+            _rubric_key = self.cache.rubric_key(
+                self._platform,
+                self.owner,
+                self.repo_name,
+                pr_number,
+                base_sha,
+                head_sha,
             )
-            if not full_patch:
-                entry["error"] = "could not retrieve patch"
-                results.append(entry)
-                continue
+            if (entry := self.cache.get(_rubric_key)) is None:
+                entry = {"number": pr_number, "url": pr.get("url", "")}
 
-            pr_files_nodes = pr.get("files", {}).get("nodes", [])
-            files_changed = [f.get("path", "") for f in pr_files_nodes if f.get("path")]
+                if not base_sha or not head_sha:
+                    entry["error"] = "missing base or head SHA"
+                    results.append(entry)
+                    continue
 
-            src_diff, test_diff = split_patch_by_test_files(
-                full_patch,
-                lambda path, cfg: is_test_file_path(path, cfg),
-                language_config,
-            )
-            problem_statement = _problem_statement_for_pr(pr)
-            commit_message = (pr.get("title") or "").strip()
-
-            try:
-                _passed, scores = qe.evaluate_candidate(
-                    src_diff,
-                    test_diff,
-                    problem_statement=problem_statement or None,
-                    hints="",
-                    commit_message=commit_message,
-                    files_changed=files_changed,
+                full_patch = pr_analyzer._get_patch_from_git(
+                    base_sha, head_sha, pr_number=pr_number
                 )
-            except CostLimitAborted:
-                pr_analysis.pr_rubrics = results
-                raise
-            except Exception as e:
-                logger.warning("PR rubrics failed for #%s: %s", pr_number, e)
-                entry["error"] = str(e)
-                results.append(entry)
-                continue
+                if not full_patch:
+                    entry["error"] = "could not retrieve patch"
+                    results.append(entry)
+                    continue
 
-            if scores is None:
-                entry["error"] = qe.last_rejection_reason or "evaluation_failed"
-                results.append(entry)
-                continue
+                pr_files_nodes = pr.get("files", {}).get("nodes", [])
+                files_changed = [
+                    f.get("path", "") for f in pr_files_nodes if f.get("path")
+                ]
 
-            trimmed = scores.to_trimmed_rubrics_dict()
-            entry["rubrics"] = trimmed
-            entry["rubric_accepted"] = _is_rubric_accepted(trimmed)
+                src_diff, test_diff = split_patch_by_test_files(
+                    full_patch,
+                    lambda path, cfg: is_test_file_path(path, cfg),
+                    language_config,
+                )
+                problem_statement = _problem_statement_for_pr(pr)
+                commit_message = (pr.get("title") or "").strip()
+
+                try:
+                    _passed, scores = qe.evaluate_candidate(
+                        src_diff,
+                        test_diff,
+                        problem_statement=problem_statement or None,
+                        hints="",
+                        commit_message=commit_message,
+                        files_changed=files_changed,
+                    )
+                except CostLimitAborted:
+                    pr_analysis.pr_rubrics = results
+                    raise
+                except Exception as e:
+                    logger.warning("PR rubrics failed for #%s: %s", pr_number, e)
+                    entry["error"] = str(e)
+                    results.append(entry)
+                    continue
+
+                if scores is None:
+                    entry["error"] = qe.last_rejection_reason or "evaluation_failed"
+                    results.append(entry)
+                    continue
+
+                trimmed = scores.to_trimmed_rubrics_dict()
+                entry["rubrics"] = trimmed
+                entry["rubric_accepted"] = _is_rubric_accepted(trimmed)
+                if "rubric_accepted" in entry:
+                    self.cache.set(_rubric_key, entry)
+
             results.append(entry)
-            if entry["rubric_accepted"]:
+            if entry.get("rubric_accepted"):
                 rubric_accepted_count += 1
             get_tracker().set_rubric_accepted(rubric_accepted_count)
 
@@ -3833,6 +3927,12 @@ def main():
         default=int(os.environ.get("LLM_CONCURRENCY", "4")),
         help="Max parallel taxonomy LLM calls per repo (default: 4 or LLM_CONCURRENCY env)",
     )
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        default=False,
+        help="Recompute all stages; results are still written to cache for future runs",
+    )
 
     args = parser.parse_args()
 
@@ -3958,6 +4058,9 @@ def main():
     else:
         platform_client = GitHubClient(owner, repo_name, token)
 
+    _cache = EvalCache(read_enabled=not args.no_cache)
+    _platform = type(platform_client).__name__.replace("Client", "").lower()
+
     repo_path = args.repo_path
     temp_dir = None
     should_cleanup = True
@@ -3999,6 +4102,7 @@ def main():
             f2p_timeout=args.f2p_timeout,
             pr_number=args.pr_number,
             skip_pr_rubrics=args.skip_pr_rubrics,
+            cache=_cache,
         )
 
         report = evaluator.evaluate()
@@ -4009,12 +4113,17 @@ def main():
             raise CostLimitAborted()
 
         if not args.skip_quality_checks:
-            qc_results = run_all_quality_checks(
-                owner=owner,
-                repo=repo_name,
-                token=token or "",
-                skip_llm=args.skip_quality_llm,
-                repo_path=repo_path,
+            qc_results = _cache.get_or_compute(
+                _cache.quality_checks_key(
+                    _platform, owner, repo_name, args.skip_quality_llm
+                ),
+                lambda: run_all_quality_checks(
+                    owner=owner,
+                    repo=repo_name,
+                    token=token or "",
+                    skip_llm=args.skip_quality_llm,
+                    repo_path=repo_path,
+                ),
             )
             report_json.update(qc_results)
         else:
@@ -4044,6 +4153,7 @@ def main():
                 max_non_test_files=args.max_non_test_files,
                 min_code_changes=args.min_code_changes,
                 start_date=start_date,
+                cache=_cache,
             )
 
             def _taxonomy_patch(pr: dict) -> str | None:
@@ -4053,15 +4163,47 @@ def main():
                     pr_number=pr.get("number"),
                 )
 
-            pr_taxonomy = run_taxonomy_for_accepted_prs(
-                accepted_prs=report.pr_analysis.accepted_prs,
-                owner=owner,
-                repo=repo_name,
-                primary_language=report.repo_metrics.primary_language or "",
-                get_patch=_taxonomy_patch,
-                pr_number=args.pr_number,
-                concurrency=args.taxonomy_concurrency,
-            )
+            _tax_prs = [
+                pr
+                for pr in report.pr_analysis.accepted_prs
+                if args.pr_number is None or pr["number"] == args.pr_number
+            ]
+            _tax_keys = {
+                pr["number"]: _cache.taxonomy_key(
+                    _platform,
+                    owner,
+                    repo_name,
+                    pr["number"],
+                    pr.get("baseRefOid", ""),
+                    pr.get("headRefOid", ""),
+                )
+                for pr in _tax_prs
+            }
+            _tax_hits = {num: _cache.get(key) for num, key in _tax_keys.items()}
+            _tax_cached = {
+                num: val for num, val in _tax_hits.items() if val is not None
+            }
+            _tax_uncached = [pr for pr in _tax_prs if pr["number"] not in _tax_cached]
+
+            _new_results = []
+            if _tax_uncached:
+                _new_results = (
+                    run_taxonomy_for_accepted_prs(
+                        accepted_prs=_tax_uncached,
+                        owner=owner,
+                        repo=repo_name,
+                        primary_language=report.repo_metrics.primary_language or "",
+                        get_patch=_taxonomy_patch,
+                        pr_number=args.pr_number,
+                        concurrency=args.taxonomy_concurrency,
+                    )
+                    or []
+                )
+                for r in _new_results:
+                    if (num := r.get("number")) and "error" not in r:
+                        _cache.set(_tax_keys[num], r)
+
+            pr_taxonomy = list(_tax_cached.values()) + _new_results
             if pr_taxonomy:
                 report_json["pr_taxonomy"] = pr_taxonomy
 
@@ -4086,6 +4228,7 @@ def main():
                     max_non_test_files=args.max_non_test_files,
                     min_code_changes=args.min_code_changes,
                     start_date=start_date,
+                    cache=_cache,
                 )
                 fe = FairnessEvaluator()
                 fairness_results: List[dict] = []
@@ -4094,31 +4237,36 @@ def main():
                         pr_number = pr.get("number")
                         if args.pr_number is not None and pr_number != args.pr_number:
                             continue
-                        entry: dict = {"number": pr_number}
                         base_sha = pr.get("baseRefOid", "") or ""
                         head_sha = pr.get("headRefOid", "") or ""
-                        if not base_sha or not head_sha:
-                            entry["error"] = "missing base or head SHA"
-                            fairness_results.append(entry)
-                            continue
-                        full_patch = fairness_pr_analyzer._get_patch_from_git(
-                            base_sha, head_sha, pr_number=pr_number
+                        _fairness_key = _cache.fairness_key(
+                            _platform, owner, repo_name, pr_number, base_sha, head_sha
                         )
-                        if not full_patch:
-                            entry["error"] = "could not retrieve patch"
-                            fairness_results.append(entry)
-                            continue
-                        src_diff, test_diff = split_patch_by_test_files(
-                            full_patch,
-                            lambda path, cfg: is_test_file_path(path, cfg),
-                            fairness_lang_config,
-                        )
-                        problem_statement = _problem_statement_for_pr(pr)
-                        result = fe.evaluate(src_diff, test_diff, problem_statement)
-                        if result:
-                            entry.update(result)
-                        else:
-                            entry["error"] = "fairness evaluation failed"
+                        if (entry := _cache.get(_fairness_key)) is None:
+                            entry = {"number": pr_number}
+                            if not base_sha or not head_sha:
+                                entry["error"] = "missing base or head SHA"
+                                fairness_results.append(entry)
+                                continue
+                            full_patch = fairness_pr_analyzer._get_patch_from_git(
+                                base_sha, head_sha, pr_number=pr_number
+                            )
+                            if not full_patch:
+                                entry["error"] = "could not retrieve patch"
+                                fairness_results.append(entry)
+                                continue
+                            src_diff, test_diff = split_patch_by_test_files(
+                                full_patch,
+                                lambda path, cfg: is_test_file_path(path, cfg),
+                                fairness_lang_config,
+                            )
+                            problem_statement = _problem_statement_for_pr(pr)
+                            result = fe.evaluate(src_diff, test_diff, problem_statement)
+                            if result:
+                                entry.update(result)
+                                _cache.set(_fairness_key, entry)
+                            else:
+                                entry["error"] = "fairness evaluation failed"
                         fairness_results.append(entry)
                 except CostLimitAborted:
                     if fairness_results:

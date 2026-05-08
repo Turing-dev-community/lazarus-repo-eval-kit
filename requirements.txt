@@ -7,3 +7,4 @@ google-genai>=1.74.0
 pyyaml>=6.0.3
 tomli>=2.4.1
 genai-prices>=0.0.57
+diskcache>=5.6.3
