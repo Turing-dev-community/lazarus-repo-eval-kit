@@ -467,7 +467,7 @@ Use your tools to investigate freely — you are not limited to any language or 
 
 THOROUGHNESS:
 Investigate deeply — superficial passes miss real signals.
-Make at least 12 tool calls before returning. Use ALL your tools freely.
+Make at least 8 tool calls before returning. Use ALL your tools freely.
 Start broad (history, structure), then follow whatever catches your eye.
 When a pattern looks interesting, quantify it — measure how widespread it is,
 don't just note it anecdotally.
@@ -555,7 +555,7 @@ not best-practice checklist items. You are not limited to any specific language.
 
 THOROUGHNESS:
 Investigate deeply — superficial passes miss real vulnerabilities.
-Make at least 12 tool calls before returning. Use ALL your tools freely.
+Make at least 8 tool calls before returning. Use ALL your tools freely.
 A grep match is NEVER a finding by itself — always read the surrounding code to confirm.
 Trace data flows: understand where user input enters, how it's processed, where it ends up.
 
@@ -643,7 +643,7 @@ Not limited to any specific language.
 
 THOROUGHNESS:
 Investigate deeply — superficial passes miss real issues.
-Make at least 12 tool calls before returning. Use ALL your tools freely.
+Make at least 8 tool calls before returning. Use ALL your tools freely.
 Don't just scan for patterns — understand the code's failure modes by reading it.
 
 DESCRIPTION FORMAT:
