@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.5.0...v0.5.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* Reduce minimum tool calls to 8 to avoid context window overflow. ([0ee8c59](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/0ee8c598d5d4158a1b08c97277f6323eb70936f0))
+* Reduce minimum tool calls to 8 to avoid context window overflow. ([a4c24e0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/a4c24e0a052cc985904d32644f9e3d97a87fe2bd))
+
 ## [0.5.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.4.1...v0.5.0) (2026-05-06)
 
 
