@@ -1,6 +1,13 @@
+import os
 import re
+from pathlib import Path
 
-MAX_ACCEPTED_PRS = 50
+from dotenv import load_dotenv
+
+if not os.environ.get("REPO_EVAL_SKIP_DOTENV"):
+    load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=False)
+
+MAX_ACCEPTED_PRS = int(os.environ.get("MAX_ACCEPTED_PRS", 50))
 INITIAL_BATCH_MULTIPLIER = 2
 
 MIN_PR_CODE_CHANGES = 1

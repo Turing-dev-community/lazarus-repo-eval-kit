@@ -277,8 +277,9 @@ def list_directory(ctx: RunContext[str], rel_path: str = "") -> str:
                 break
     except Exception as exc:
         return f"[Error listing {rel_path!r}: {exc}]"
-
-    return "\n".join(entries) if entries else "(empty directory)"
+    result = "\n".join(entries) if entries else "(empty directory)"
+    logger.debug("[tool] list_directory(%r): %d chars", rel_path, len(result))
+    return result
 
 
 def read_file_section(
@@ -302,9 +303,15 @@ def read_file_section(
         return f"[Skipped: {rel_path!r} is a generated/vendor file]"
 
     # Cap window
-    end_line = min(end_line, start_line + 299)
-
-    return safe_read(abs_path, start_line, end_line)
+    result = safe_read(abs_path, start_line, end_line)
+    logger.debug(
+        "[tool] read_file_section(%r, %d-%d): %d chars",
+        rel_path,
+        start_line,
+        end_line,
+        len(result),
+    )
+    return result
 
 
 def grep_codebase(
@@ -367,18 +374,27 @@ def grep_codebase(
                 matches_found += 1
                 if matches_found >= 40:
                     break
-
-    if not results:
-        return f"[No matches found for pattern {pattern!r}]"
+        no_match = f"[No matches found for pattern {pattern!r}]"
+        logger.debug(
+            "[tool] grep_codebase(%r): 0 matches, %d chars", pattern, len(no_match)
+        )
+        return no_match
 
     header = f"Found {matches_found} match(es)"
     if matches_found >= 40:
         header += " (truncated at 40)"
-    return header + "\n\n" + "\n\n".join(results)
+    output = header + "\n\n" + "\n\n".join(results)
+    logger.debug(
+        "[tool] grep_codebase(%r): %d matches, %d chars",
+        pattern,
+        matches_found,
+        len(output),
+    )
+    return output
 
 
 def git_log_summary(ctx: RunContext[str], max_commits: int = 100) -> str:
-    """Structured git log: hash|author|date|message with file-change stats.
+    """Structured git log: hash|author|date|message with summary change stats.
 
     Caps at 200 commits. Shows files changed/insertions/deletions per commit.
     """
@@ -392,12 +408,13 @@ def git_log_summary(ctx: RunContext[str], max_commits: int = 100) -> str:
             f"--max-count={max_commits}",
             "--pretty=format:COMMIT %h | %an | %ad | %s",
             "--date=short",
-            "--stat",
+            "--shortstat",
         ],
     )
     if not log or log.startswith("[git error"):
         return "[No git history available or not a git repository]"
 
+    logger.debug("[tool] git_log_summary(max=%d): %d chars", max_commits, len(log))
     return log
 
 
@@ -465,9 +482,7 @@ VIBE_SYSTEM_PROMPT = """\
 You are an expert at detecting AI-generated ("vibe-coded") repositories.
 Use your tools to investigate freely — you are not limited to any language or framework.
 
-THOROUGHNESS:
-Investigate deeply — superficial passes miss real signals.
-Make at least 8 tool calls before returning. Use ALL your tools freely.
+Make at least 12 tool calls before returning. Use ALL your tools freely.
 Start broad (history, structure), then follow whatever catches your eye.
 When a pattern looks interesting, quantify it — measure how widespread it is,
 don't just note it anecdotally.
@@ -553,9 +568,7 @@ SECURITY_SYSTEM_PROMPT = """\
 You are a senior application security engineer. Find real, exploitable vulnerabilities —
 not best-practice checklist items. You are not limited to any specific language.
 
-THOROUGHNESS:
-Investigate deeply — superficial passes miss real vulnerabilities.
-Make at least 8 tool calls before returning. Use ALL your tools freely.
+Make at least 12 tool calls before returning. Use ALL your tools freely.
 A grep match is NEVER a finding by itself — always read the surrounding code to confirm.
 Trace data flows: understand where user input enters, how it's processed, where it ends up.
 
@@ -641,9 +654,7 @@ You are a senior SRE conducting a production readiness review.
 Frame: Susan Fowler's production-readiness axes + Google SRE PRR.
 Not limited to any specific language.
 
-THOROUGHNESS:
-Investigate deeply — superficial passes miss real issues.
-Make at least 8 tool calls before returning. Use ALL your tools freely.
+Make at least 12 tool calls before returning. Use ALL your tools freely.
 Don't just scan for patterns — understand the code's failure modes by reading it.
 
 DESCRIPTION FORMAT:
