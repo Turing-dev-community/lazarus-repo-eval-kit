@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.5.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.4.1...v0.5.0) (2026-05-11)
+
+
+### Features
+
+* Add caching for the ability to continue in case of a crash. ([#42](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/issues/42)) ([ff1b6a8](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/ff1b6a8132c3bb88166db97da5b2120226a2e11c))
+* Add version to JSON/CSV output ([037e148](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/037e148e93a034707034fc3ec5c1defb4a3cdf23))
+* Add version to JSON/CSV output ([49378d6](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/49378d6b51427aaff8a1389e05bdb539ea2ed457))
+
+
+### Bug Fixes
+
+* Reduce minimum tool calls to 8 to avoid context window overflow. ([0ee8c59](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/0ee8c598d5d4158a1b08c97277f6323eb70936f0))
+* Reduce minimum tool calls to 8 to avoid context window overflow. ([a4c24e0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/a4c24e0a052cc985904d32644f9e3d97a87fe2bd))
+
 ## [0.5.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.4.1...v0.5.0) (2026-05-06)
 
 
