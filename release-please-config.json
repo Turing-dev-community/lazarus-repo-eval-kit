@@ -1,0 +1,10 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "extra-files": [
+        "eval_kit/__init__.py"
+      ]
+    }
+  }
+}

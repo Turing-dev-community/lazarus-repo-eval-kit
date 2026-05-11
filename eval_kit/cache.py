@@ -7,7 +7,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 import diskcache
 
-from eval_kit import __version__ as _EVAL_KIT_VERSION
+_EVAL_KIT_VERSION = (Path(__file__).parent.parent / "version.txt").read_text().strip()
 
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "lazarus-eval-kit"
 DEFAULT_TTL = 2 * 24 * 60 * 60  # 2 days
