@@ -3608,12 +3608,14 @@ def to_json(report: AnalysisReport) -> dict:
     accepted_prs_clean = []
     pr_enterprise_signals: list = []
     for pr in report.pr_analysis.accepted_prs:
+        closing_nodes = pr.get("closingIssuesReferences", {}).get("nodes", []) or []
         pr_data = {
             "number": pr.get("number"),
             "title": pr.get("title"),
             "url": pr.get("url"),
             "baseRefOid": pr.get("baseRefOid"),
             "headRefOid": pr.get("headRefOid"),
+            "has_linked_issue": bool(closing_nodes),
         }
         if "f2p_result" in pr:
             pr_data["f2p_result"] = pr["f2p_result"]
