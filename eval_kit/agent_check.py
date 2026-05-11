@@ -21,7 +21,10 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator, model_validator
 from pydantic_ai import Agent
+from pydantic_ai.capabilities import AbstractCapability
+from pydantic_ai.exceptions import UsageLimitExceeded
 from pydantic_ai.tools import RunContext
+from pydantic_ai.usage import UsageLimits
 
 from eval_kit.llm_client import (
     BASE_DELAY,
@@ -438,16 +441,45 @@ def make_agent(system_prompt: str) -> Agent:
     )
 
 
-def run_agent(agent: Agent, user_prompt: str, root: str) -> CheckOutput:
+CONCLUDE_PROMPT = (
+    "You have reached the maximum number of tool calls allowed for this analysis. "
+    "Based on the files and code you have already explored, produce your final "
+    "structured output now. Do NOT call any more tools — output your findings directly."
+)
+
+
+class ConcludeOnLimitCapability(AbstractCapability[str]):
+    """On UsageLimitExceeded, captures partial message history for a conclude call."""
+
+    captured_messages: list | None = None
+
+    async def on_node_run_error(
+        self, ctx: RunContext[str], *, node: object, error: Exception
+    ) -> object:  # type: ignore[override]
+        if isinstance(error, UsageLimitExceeded):
+            self.captured_messages = list(ctx.messages)
+        raise error
+
+    async def on_run_error(self, ctx: RunContext[str], *, error: BaseException) -> None:  # type: ignore[override]
+        if isinstance(error, UsageLimitExceeded) and self.captured_messages is None:
+            self.captured_messages = list(ctx.messages)
+        raise error
+
+
+def run_agent(
+    agent: Agent[str, CheckOutput], user_prompt: str, root: str
+) -> CheckOutput:
     provider = os.environ.get("LLM_PROVIDER", "openai").lower()
     model_str = build_model_string(provider)
     last_err: Exception | None = None
     for attempt in range(MAX_RETRIES):
+        cap = ConcludeOnLimitCapability()
         try:
             result = agent.run_sync(
                 user_prompt,
                 deps=root,
                 model_settings={"temperature": 0},
+                capabilities=[cap],
             )
             for msg in result.all_messages():
                 for part in msg.parts:
@@ -455,6 +487,22 @@ def run_agent(agent: Agent, user_prompt: str, root: str) -> CheckOutput:
                         logger.info("Tool call: %s(args=%r)", part.tool_name, part.args)
             _track_cost(result, model_str, provider)
             return result.output
+        except UsageLimitExceeded:
+            if cap.captured_messages:
+                logger.warning(
+                    "Request limit exceeded after %d messages; prompting agent to conclude",
+                    len(cap.captured_messages),
+                )
+                result = agent.run_sync(
+                    CONCLUDE_PROMPT,
+                    message_history=cap.captured_messages,
+                    deps=root,
+                    model_settings={"temperature": 0},
+                    usage_limits=UsageLimits(request_limit=5),
+                )
+                _track_cost(result, model_str, provider)
+                return result.output
+            raise
         except CostLimitAborted:
             raise
         except RETRYABLE_ERRORS as e:
