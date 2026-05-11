@@ -4113,9 +4113,15 @@ def main():
             raise CostLimitAborted()
 
         if not args.skip_quality_checks:
+            _qc_head_sha = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=repo_path,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
             qc_results = _cache.get_or_compute(
                 _cache.quality_checks_key(
-                    _platform, owner, repo_name, args.skip_quality_llm
+                    _platform, owner, repo_name, args.skip_quality_llm, _qc_head_sha
                 ),
                 lambda: run_all_quality_checks(
                     owner=owner,
