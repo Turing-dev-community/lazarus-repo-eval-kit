@@ -9,6 +9,7 @@
     "pr_last_date": null,
     "pr_spread_days": 0,
     "pr_unique_dates_count": 0,
+    "processed_prs": 0,
     "rejected": 0,
     "total_prs": 0
   },

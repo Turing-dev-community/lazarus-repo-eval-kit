@@ -21,3 +21,4 @@ output_*/**
 .env
 .cursor
 tests/fixtures/repos/
+.claude

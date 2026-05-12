@@ -38,7 +38,7 @@ import sys
 import tempfile
 import traceback
 import xml.etree.ElementTree as ET
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date as _date
 from datetime import datetime, timezone
 from pathlib import Path
@@ -171,18 +171,19 @@ def _merge_pr_stats(
         return batch
 
     merged_accepted = cumulative.accepted_prs + batch.accepted_prs
-    total = cumulative.total_prs + batch.total_prs
+    total = max(cumulative.total_prs, batch.total_prs)
+    processed = cumulative.processed_prs + batch.processed_prs
     rejected = cumulative.rejected + batch.rejected
 
     avg_loc = _safe_div(
-        cumulative.avg_loc_per_pr * cumulative.total_prs
-        + batch.avg_loc_per_pr * batch.total_prs,
-        total,
+        cumulative.avg_loc_per_pr * cumulative.processed_prs
+        + batch.avg_loc_per_pr * batch.processed_prs,
+        processed,
     )
     issue_ratio = _safe_div(
-        cumulative.issue_linked_pr_ratio * cumulative.total_prs
-        + batch.issue_linked_pr_ratio * batch.total_prs,
-        total,
+        cumulative.issue_linked_pr_ratio * cumulative.processed_prs
+        + batch.issue_linked_pr_ratio * batch.processed_prs,
+        processed,
     )
 
     def _min_date(a: Optional[str], b: Optional[str]) -> Optional[str]:
@@ -210,9 +211,10 @@ def _merge_pr_stats(
     return PRRejectionStats(
         accepted_prs=merged_accepted,
         total_prs=total,
+        processed_prs=processed,
         accepted=len(merged_accepted),
         rejected=rejected,
-        acceptance_rate=round(_safe_div(len(merged_accepted), total), 3),
+        acceptance_rate=round(_safe_div(len(merged_accepted), processed), 3),
         rejection_breakdown=_merge_rejection_breakdown(
             cumulative.rejection_breakdown, batch.rejection_breakdown
         ),
@@ -695,10 +697,11 @@ class PRRejectionStats:
 
     accepted_prs: List[dict]
     total_prs: int
-    accepted: int
-    rejected: int
-    acceptance_rate: float
-    rejection_breakdown: Dict[str, Dict[str, Any]]
+    processed_prs: int = 0
+    accepted: int = 0
+    rejected: int = 0
+    acceptance_rate: float = 0.0
+    rejection_breakdown: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     f2p_results: Optional[List[dict]] = None
     f2p_skipped_reason: Optional[str] = None
     feature_accepted_prs: Optional[List[dict]] = None
@@ -1783,6 +1786,12 @@ class RepoAnalyzer:
                     )
 
             # Branch count
+            subprocess.run(
+                ["git", "fetch", "--all", "--quiet"],
+                cwd=self.repo_path,
+                capture_output=True,
+                timeout=60,
+            )
             branch_result = subprocess.run(
                 ["git", "branch", "--all", "--format=%(refname:short)"],
                 cwd=self.repo_path,
@@ -2329,7 +2338,8 @@ class PRAnalyzer:
         cursor = start_cursor
         _next_cursor: Optional[str] = None
         _has_more_pages: bool = False
-        total_prs = 0
+        repo_total_prs: Optional[int] = None
+        processed_prs = 0
         accepted = 0
         rejected = 0
         rejection_reasons = {}
@@ -2376,12 +2386,15 @@ class PRAnalyzer:
                 pr_nodes = pr_data.get("nodes", [])
                 page_info = pr_data.get("pageInfo", {})
 
+                if repo_total_prs is None:
+                    repo_total_prs = pr_data.get("totalCount")
+
                 if not pr_nodes:
                     break
 
                 for pr_data in pr_nodes:
-                    if (max_prs and total_prs >= max_prs) or (
-                        batch_limit and total_prs >= batch_limit
+                    if (max_prs and processed_prs >= max_prs) or (
+                        batch_limit and processed_prs >= batch_limit
                     ):
                         break
 
@@ -2434,7 +2447,7 @@ class PRAnalyzer:
                         if extracted_issue_numbers:
                             prs_with_issue_links += 1
 
-                    total_prs += 1
+                    processed_prs += 1
 
                     # === Shared filters (reject from both buckets) ===
                     shared_failed = None
@@ -2726,8 +2739,8 @@ class PRAnalyzer:
                             feature_rejection_reasons.get(reason, 0) + 1
                         )
 
-                if (max_prs and total_prs >= max_prs) or (
-                    batch_limit and total_prs >= batch_limit
+                if (max_prs and processed_prs >= max_prs) or (
+                    batch_limit and processed_prs >= batch_limit
                 ):
                     _next_cursor = page_info.get("endCursor")
                     _has_more_pages = page_info.get("hasNextPage", False)
@@ -2781,9 +2794,9 @@ class PRAnalyzer:
                 ),
             }
 
-        acceptance_rate = (accepted / total_prs) if total_prs > 0 else 0.0
-        avg_loc_per_pr = _safe_div(total_pr_loc, total_prs)
-        issue_linked_pr_ratio = _safe_div(prs_with_issue_links, total_prs)
+        acceptance_rate = (accepted / processed_prs) if processed_prs > 0 else 0.0
+        avg_loc_per_pr = _safe_div(total_pr_loc, processed_prs)
+        issue_linked_pr_ratio = _safe_div(prs_with_issue_links, processed_prs)
 
         if pr_created_datetimes:
             _first = min(pr_created_datetimes)
@@ -2799,7 +2812,8 @@ class PRAnalyzer:
             pr_unique_dates_set = set()
 
         return PRRejectionStats(
-            total_prs=total_prs,
+            total_prs=repo_total_prs if repo_total_prs is not None else processed_prs,
+            processed_prs=processed_prs,
             accepted=accepted,
             rejected=rejected,
             acceptance_rate=round(acceptance_rate, 3),
@@ -2970,7 +2984,7 @@ class RepoEvaluator:
                     start_cursor=cursor,
                     batch_limit=batch_limit,
                 )
-                total_raw_scanned += batch_stats.total_prs
+                total_raw_scanned += batch_stats.processed_prs
 
                 # Preserve cursor state — pipeline methods construct a fresh
                 # PRRejectionStats and lose these fields
@@ -2993,14 +3007,14 @@ class RepoEvaluator:
                 cursor = batch_cursor
 
                 # Adjust multiplier from observed post-pipeline acceptance rate
-                if batch_stats.total_prs > 0:
+                if batch_stats.processed_prs > 0:
                     if not self.skip_pr_rubrics:
                         batch_goal_accepted = _count_rubric_accepted(
                             batch_stats.pr_rubrics
                         )
                     else:
                         batch_goal_accepted = batch_stats.accepted
-                    observed_rate = batch_goal_accepted / batch_stats.total_prs
+                    observed_rate = batch_goal_accepted / batch_stats.processed_prs
                     if observed_rate > 0:
                         multiplier = max(2.0, _math.ceil(1.0 / observed_rate) + 1)
                     else:
@@ -3037,6 +3051,7 @@ class RepoEvaluator:
             logger.warning("API access issues")
             cumulative_stats = PRRejectionStats(
                 total_prs=0,
+                processed_prs=0,
                 accepted=0,
                 rejected=0,
                 acceptance_rate=0.0,
@@ -3044,7 +3059,7 @@ class RepoEvaluator:
                 accepted_prs=[],
                 pr_rubrics=[],
             )
-        elif cumulative_stats.total_prs == 0:
+        elif cumulative_stats.processed_prs == 0:
             logger.warning("No PRs were analyzed. This could be due to:")
             if not self.platform_client.token:
                 logger.warning("Rate limit exceeded (provide --token)")
@@ -3153,7 +3168,9 @@ class RepoEvaluator:
 
         # Calculate overall score (weighted: 60% repo, 40% PR acceptance rate)
         repo_score = repo_metrics.readiness_score
-        pr_score = pr_analysis.acceptance_rate * 100 if pr_analysis.total_prs > 0 else 0
+        pr_score = (
+            pr_analysis.acceptance_rate * 100 if pr_analysis.processed_prs > 0 else 0
+        )
         overall_score = (repo_score * 0.6) + (pr_score * 0.4)
 
         # Overall recommendation
@@ -3283,12 +3300,15 @@ class RepoEvaluator:
         new_accepted = len(f2p_validated_prs)
         new_rejected = pr_analysis.rejected + f2p_rejected_count
         new_acceptance_rate = (
-            new_accepted / pr_analysis.total_prs if pr_analysis.total_prs > 0 else 0.0
+            new_accepted / pr_analysis.processed_prs
+            if pr_analysis.processed_prs > 0
+            else 0.0
         )
 
         return PRRejectionStats(
             accepted_prs=f2p_validated_prs,
             total_prs=pr_analysis.total_prs,
+            processed_prs=pr_analysis.processed_prs,
             accepted=new_accepted,
             rejected=new_rejected,
             acceptance_rate=round(new_acceptance_rate, 3),
@@ -3515,7 +3535,8 @@ def print_report(report: AnalysisReport):
     #         #     print(f"  - {label}: {check.get('value')}")
 
     print("\n--- PR Analysis ---")
-    print(f"Total PRs Analyzed: {report.pr_analysis.total_prs}")
+    print(f"Total PRs (repo): {report.pr_analysis.total_prs}")
+    print(f"Processed PRs: {report.pr_analysis.processed_prs}")
     print(f"Passed First Filters PRs: {len(report.pr_analysis.accepted_prs)}")
     for pr in report.pr_analysis.accepted_prs:
         f2p_info = ""
@@ -3533,7 +3554,7 @@ def print_report(report: AnalysisReport):
     )
     if report.pr_analysis.pr_rubrics:
         rubric_passed = _count_rubric_accepted(report.pr_analysis.pr_rubrics)
-        total = report.pr_analysis.total_prs
+        total = report.pr_analysis.processed_prs
         print(
             f"Passed Rubrics (& First Filters): {rubric_passed} ({rubric_passed / total * 100:.1f}%)"
             if total > 0
@@ -3587,12 +3608,14 @@ def to_json(report: AnalysisReport) -> dict:
     accepted_prs_clean = []
     pr_enterprise_signals: list = []
     for pr in report.pr_analysis.accepted_prs:
+        closing_nodes = pr.get("closingIssuesReferences", {}).get("nodes", []) or []
         pr_data = {
             "number": pr.get("number"),
             "title": pr.get("title"),
             "url": pr.get("url"),
             "baseRefOid": pr.get("baseRefOid"),
             "headRefOid": pr.get("headRefOid"),
+            "has_linked_issue": bool(closing_nodes),
         }
         if "f2p_result" in pr:
             pr_data["f2p_result"] = pr["f2p_result"]
@@ -3685,6 +3708,7 @@ def to_json(report: AnalysisReport) -> dict:
         "repo_metrics": repo_metrics_out,
         "pr_analysis": {
             "total_prs": report.pr_analysis.total_prs,
+            "processed_prs": report.pr_analysis.processed_prs,
             "pass_first_filter": report.pr_analysis.accepted,
             "rejected": report.pr_analysis.rejected,
             "pass_first_filter_rate": report.pr_analysis.acceptance_rate,

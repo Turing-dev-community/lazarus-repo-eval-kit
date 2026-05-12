@@ -193,6 +193,7 @@ class GitHubClient(PlatformClient):
                 after: $cursor,
                 orderBy: {field: CREATED_AT, direction: DESC}
               ) {
+                totalCount
                 pageInfo {
                   endCursor
                   hasNextPage
@@ -551,7 +552,11 @@ class BitbucketClient(PlatformClient):
                     "primaryLanguage": {"name": primary_language_name},
                     "owner": {"login": self.owner},
                     "name": self.repo_name,
-                    "pullRequests": {"pageInfo": page_info, "nodes": pr_nodes},
+                    "pullRequests": {
+                        "pageInfo": page_info,
+                        "nodes": pr_nodes,
+                        "totalCount": data.get("size", len(pr_nodes)),
+                    },
                 }
             }
         }
@@ -722,6 +727,10 @@ class GitLabClient(PlatformClient):
 
         data = response.json()
         next_page = response.headers.get("X-Next-Page", "")
+        total_count_header = response.headers.get("X-Total")
+        gitlab_total_count = (
+            int(total_count_header) if total_count_header is not None else len(data)
+        )
 
         pr_nodes = []
         for mr in data:
@@ -789,6 +798,7 @@ class GitLabClient(PlatformClient):
                             "endCursor": next_page or None,
                         },
                         "nodes": pr_nodes,
+                        "totalCount": gitlab_total_count,
                     },
                 }
             }

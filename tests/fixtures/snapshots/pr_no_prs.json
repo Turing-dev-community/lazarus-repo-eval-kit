@@ -18,6 +18,7 @@
   "pr_spread_days": 0,
   "pr_unique_dates": [],
   "pr_unique_dates_count": 0,
+  "processed_prs": 0,
   "rejected": 0,
   "rejection_breakdown": {},
   "total_prs": 0
