@@ -6,7 +6,7 @@
 ### Bug Fixes
 
 * correctly handle max tool call exceeded ([#52](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/issues/52)) ([d32e480](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/d32e480d790ae4936d62c5e4c9947513fb671ae9))
-* correctly handle max tool call exceeded ([#52](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/issues/52)) ([64239ff](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/64239ff2edf6d6106ab57f85ca0b5fb078113e7d))
+
 
 ## [0.6.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.5.0...v0.6.0) (2026-05-11)
 
