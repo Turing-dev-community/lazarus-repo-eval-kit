@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.6.0...v0.6.1) (2026-05-12)
+
+
+### Bug Fixes
+
+* correctly handle max tool call exceeded ([#52](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/issues/52)) ([d32e480](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/d32e480d790ae4936d62c5e4c9947513fb671ae9))
+
+
 ## [0.6.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.5.0...v0.6.0) (2026-05-11)
 
 
