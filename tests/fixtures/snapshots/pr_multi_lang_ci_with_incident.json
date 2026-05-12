@@ -283,6 +283,7 @@
     "2024-03-01"
   ],
   "pr_unique_dates_count": 5,
+  "processed_prs": 5,
   "rejected": 4,
   "rejection_breakdown": {
     "bot_pr": {
