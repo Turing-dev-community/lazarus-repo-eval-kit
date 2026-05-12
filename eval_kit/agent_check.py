@@ -451,19 +451,20 @@ CONCLUDE_PROMPT = (
 class ConcludeOnLimitCapability(AbstractCapability[str]):
     """On UsageLimitExceeded, captures partial message history for a conclude call."""
 
-    captured_messages: list | None = None
+    def __init__(self) -> None:
+        self.captured_messages: list | None = None
 
     async def on_node_run_error(
         self, ctx: RunContext[str], *, node: object, error: Exception
     ) -> object:  # type: ignore[override]
         if isinstance(error, UsageLimitExceeded):
             self.captured_messages = list(ctx.messages)
-        raise error
+        raise
 
     async def on_run_error(self, ctx: RunContext[str], *, error: BaseException) -> None:  # type: ignore[override]
         if isinstance(error, UsageLimitExceeded) and self.captured_messages is None:
             self.captured_messages = list(ctx.messages)
-        raise error
+        raise
 
 
 def run_agent(
@@ -487,12 +488,19 @@ def run_agent(
                         logger.info("Tool call: %s(args=%r)", part.tool_name, part.args)
             _track_cost(result, model_str, provider)
             return result.output
-        except UsageLimitExceeded:
-            if cap.captured_messages:
+        except UsageLimitExceeded as original_exc:
+            if cap.captured_messages is None:
+                raise
+            if not cap.captured_messages:
                 logger.warning(
-                    "Request limit exceeded after %d messages; prompting agent to conclude",
-                    len(cap.captured_messages),
+                    "Request limit exceeded but no messages were captured; cannot conclude"
                 )
+                raise
+            logger.warning(
+                "Request limit exceeded after %d messages; prompting agent to conclude",
+                len(cap.captured_messages),
+            )
+            try:
                 result = agent.run_sync(
                     CONCLUDE_PROMPT,
                     message_history=cap.captured_messages,
@@ -500,9 +508,11 @@ def run_agent(
                     model_settings={"temperature": 0},
                     usage_limits=UsageLimits(request_limit=5),
                 )
-                _track_cost(result, model_str, provider)
-                return result.output
-            raise
+            except UsageLimitExceeded as conclude_exc:
+                logger.warning("Conclude attempt also exceeded its request limit")
+                raise conclude_exc from original_exc
+            _track_cost(result, model_str, provider)
+            return result.output
         except CostLimitAborted:
             raise
         except RETRYABLE_ERRORS as e:
