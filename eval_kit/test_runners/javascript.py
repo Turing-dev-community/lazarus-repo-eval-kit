@@ -695,21 +695,35 @@ class VitestRunner(TestRunner):
         project_root = self._get_project_root(repo_path)
         _, _, run_cmd = self._get_pm_commands(repo_path)
 
+        # Workspace setups can prefix stdout with TAP/warning lines that break
+        # json.loads(stdout). Write JSON to a temp file instead.
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
+            json_path = Path(f.name)
+
         try:
-            cmd = run_cmd + ["vitest", "run", "--reporter=json"]
+            cmd = run_cmd + [
+                "vitest",
+                "run",
+                "--reporter=json",
+                f"--outputFile={json_path}",
+            ]
             returncode, stdout, stderr = self._run_command(
                 cmd, project_root, timeout=timeout
             )
             output = stdout + "\n" + stderr
 
-            # Try to parse JSON from stdout
-            try:
-                data = json.loads(stdout)
+            for source in (json_path, None):
+                try:
+                    if source is None:
+                        data = json.loads(stdout)
+                    else:
+                        with open(source) as jf:
+                            data = json.load(jf)
+                except (FileNotFoundError, json.JSONDecodeError):
+                    continue
                 result = self._parse_vitest_output(data, output)
                 result.exit_code = returncode
                 return result
-            except json.JSONDecodeError:
-                pass
 
             result = TestResult(raw_output=output, exit_code=returncode)
             if returncode != 0:
@@ -718,6 +732,11 @@ class VitestRunner(TestRunner):
 
         except TestTimeoutError as e:
             return TestResult(error=str(e))
+        finally:
+            try:
+                json_path.unlink(missing_ok=True)
+            except Exception:
+                pass
 
     def _parse_vitest_output(self, data: dict, output: str) -> TestResult:
         """Parse Vitest JSON output."""
