@@ -459,12 +459,12 @@ class ConcludeOnLimitCapability(AbstractCapability[str]):
     ) -> object:  # type: ignore[override]
         if isinstance(error, UsageLimitExceeded):
             self.captured_messages = list(ctx.messages)
-        raise
+        raise error
 
     async def on_run_error(self, ctx: RunContext[str], *, error: BaseException) -> None:  # type: ignore[override]
         if isinstance(error, UsageLimitExceeded) and self.captured_messages is None:
             self.captured_messages = list(ctx.messages)
-        raise
+        raise error
 
 
 def run_agent(
