@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.6.1...v0.6.2) (2026-05-14)
+
+
+### Bug Fixes
+
+* Explicitly raise error argument to fix no-active-exception crashes. ([4edf68e](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/4edf68ef430d1e9e2cb2d20599f6503d35ac899a))
+
 ## [0.6.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.6.0...v0.6.1) (2026-05-12)
 
 
