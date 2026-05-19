@@ -26,6 +26,7 @@
     "ai_risk_level": "low",
     "ai_risk_score": 0,
     "ai_risk_signals": [],
+    "avg_function_loc": 2.0,
     "avg_loc_per_commit": 43.5,
     "avg_loc_per_pr": 0.0,
     "branch_count": 2,
