@@ -44,6 +44,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import lizard
 from dotenv import load_dotenv
 
 from eval_kit.cache import EvalCache
@@ -682,6 +683,7 @@ class RepoMetrics:
     test_files_to_source_files_ratio: Optional[float] = None
     code_churn_rate: Optional[float] = None
     comment_density: Optional[float] = None
+    avg_function_loc: Optional[float] = None
     readme_length_chars: Optional[int] = None
     readme_has_badges: Optional[bool] = None
     readme_has_installation: Optional[bool] = None
@@ -963,6 +965,7 @@ class RepoAnalyzer:
         test_file_ratio = len(test_files) / total_files if total_files > 0 else 0
 
         loc_counts = self._count_lines_of_code(files)
+        avg_function_loc = self._count_avg_function_loc(files)
         ci_files = self._find_ci_files()
         has_ci_cd = len(ci_files) > 0
         test_frameworks = self._detect_test_frameworks()
@@ -1054,6 +1057,7 @@ class RepoAnalyzer:
             test_files_to_source_files_ratio=None,
             code_churn_rate=git_metrics.get("code_churn_rate"),
             comment_density=comment_metrics.get("comment_density"),
+            avg_function_loc=avg_function_loc,
             readme_length_chars=None,
             readme_has_badges=None,
             readme_has_installation=None,
@@ -1215,30 +1219,20 @@ class RepoAnalyzer:
 
         return "Unknown"
 
+    def _code_extensions(self) -> set[str]:
+        return {
+            ext
+            for extensions in self.LANGUAGE_EXTENSIONS.values()
+            for ext in extensions
+        }
+
     def _count_source_files(
         self, files: List[Path], language_counts: Dict[str, int]
     ) -> int:
         """Count source files."""
         code_extensions = set()
-        for lang in [
-            "Python",
-            "JavaScript",
-            "TypeScript",
-            "Java",
-            "Scala",
-            "Go",
-            "Rust",
-            "C++",
-            "C",
-            "Ruby",
-            "PHP",
-            "C#",
-            "Swift",
-            "Kotlin",
-            "COBOL",
-        ]:
-            if lang in language_counts:
-                code_extensions.update(self.LANGUAGE_EXTENSIONS[lang])
+        for lang in language_counts:
+            code_extensions.update(self.LANGUAGE_EXTENSIONS.get(lang, []))
 
         source_count = 0
         for file_path in files:
@@ -1257,25 +1251,7 @@ class RepoAnalyzer:
 
     def _count_lines_of_code(self, files: List[Path]) -> Dict[str, int]:
         """Count lines of code."""
-        code_extensions = set()
-        for lang in [
-            "Python",
-            "JavaScript",
-            "TypeScript",
-            "Java",
-            "Scala",
-            "Go",
-            "Rust",
-            "C++",
-            "C",
-            "Ruby",
-            "PHP",
-            "C#",
-            "Swift",
-            "Kotlin",
-            "COBOL",
-        ]:
-            code_extensions.update(self.LANGUAGE_EXTENSIONS.get(lang, []))
+        code_extensions = self._code_extensions()
 
         total_loc = 0
         source_loc = 0
@@ -1304,6 +1280,38 @@ class RepoAnalyzer:
                     pass
 
         return {"total_loc": total_loc, "source_loc": source_loc, "test_loc": test_loc}
+
+    def _count_avg_function_loc(self, files: List[Path]) -> Optional[float]:
+        """Count average function lines of code."""
+        code_extensions = self._code_extensions()
+
+        source_files = [
+            str(f)
+            for f in files
+            if f.suffix.lower() in code_extensions
+            and not any(
+                re.search(p, str(f.relative_to(self.repo_path)), re.IGNORECASE)
+                for p in self.TEST_PATTERNS
+            )
+        ]
+        if not source_files:
+            return None
+
+        lengths = []
+        for source_file in source_files:
+            try:
+                lengths.extend(
+                    func.length
+                    for file_info in lizard.analyze([source_file])
+                    for func in file_info.function_list
+                )
+            except Exception:
+                logger.debug(
+                    "Failed to analyze function lengths for %s",
+                    source_file,
+                    exc_info=True,
+                )
+        return sum(lengths) / len(lengths) if lengths else None
 
     def _find_test_files(self, files: List[Path]) -> List[Path]:
         """Find test files."""
@@ -3682,6 +3690,7 @@ def to_json(report: AnalysisReport) -> dict:
         ),
         "code_churn_rate": repo_metrics_json.get("code_churn_rate"),
         "comment_density": repo_metrics_json.get("comment_density"),
+        "avg_function_loc": repo_metrics_json.get("avg_function_loc"),
         "readme_length_chars": repo_metrics_json.get("readme_length_chars"),
         "readme_has_badges": repo_metrics_json.get("readme_has_badges"),
         "readme_has_installation": repo_metrics_json.get("readme_has_installation"),
