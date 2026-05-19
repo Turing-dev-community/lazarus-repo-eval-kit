@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.6.2...v0.7.0) (2026-05-19)
+
+
+### Features
+
+* Add avg_function_loc metric ([964bb27](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/964bb27307830081a238d280d6b991f1164d9420))
+
 ## [0.6.2](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.6.1...v0.6.2) (2026-05-14)
 
 
