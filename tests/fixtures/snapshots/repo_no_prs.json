@@ -70,6 +70,8 @@
     "recent_commits_6mo": 0,
     "repo_age_days": 1,
     "repo_name": "no_prs",
+    "repo_was_public": "neutral",
+    "repo_was_public_signals": [],
     "single_commit_loc_share": 1.0,
     "source_files": 1,
     "source_loc": 2,

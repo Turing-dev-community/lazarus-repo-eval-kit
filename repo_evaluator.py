@@ -691,6 +691,8 @@ class RepoMetrics:
     process_health_checks: Dict[str, Any] = None
     process_health_summary: Dict[str, Any] = None
     enterprise_signals: Optional[Dict[str, Any]] = None
+    repo_was_public: str = "neutral"
+    repo_was_public_signals: Optional[List[str]] = None
 
 
 @dataclass
@@ -993,6 +995,7 @@ class RepoAnalyzer:
         )
 
         issue_count = self.platform_client.fetch_issue_count()
+        public_signals = self.platform_client.fetch_repo_public_signals()
 
         return RepoMetrics(
             repo_name=self.repo_name,
@@ -1062,6 +1065,8 @@ class RepoAnalyzer:
             readme_has_badges=None,
             readme_has_installation=None,
             readme_has_usage=None,
+            repo_was_public=public_signals["state"],
+            repo_was_public_signals=public_signals["signals"],
         )
 
     def _get_all_files(self) -> List[Path]:
@@ -3704,6 +3709,8 @@ def to_json(report: AnalysisReport) -> dict:
         "ai_risk_score": repo_metrics_json.get("ai_risk_score"),
         "ai_risk_level": repo_metrics_json.get("ai_risk_level"),
         "ai_risk_signals": repo_metrics_json.get("ai_risk_signals"),
+        "repo_was_public": repo_metrics_json.get("repo_was_public"),
+        "repo_was_public_signals": repo_metrics_json.get("repo_was_public_signals"),
     }
     if report.repo_metrics.enterprise_signals:
         repo_metrics_out["enterprise_signals"] = report.repo_metrics.enterprise_signals

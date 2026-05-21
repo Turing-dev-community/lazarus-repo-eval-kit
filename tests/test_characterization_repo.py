@@ -44,6 +44,7 @@ def _make_platform_client(fixture_name: str) -> Mock:
     client.fetch_repo_languages.return_value = None
     client.fetch_prs.return_value = _EMPTY_PR_RESPONSE
     client.extract_issue_number_from_text.return_value = []
+    client.fetch_repo_public_signals.return_value = {"state": "neutral", "signals": []}
     return client
 
 
