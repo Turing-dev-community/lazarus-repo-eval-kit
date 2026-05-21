@@ -172,22 +172,25 @@ class PlatformClient(ABC):
         pass
 
 
-def _check_wayback_machine(url: str) -> Optional[str]:
-    """Return snapshot timestamp string if Wayback Machine has ever crawled the URL, else None."""
-    try:
+def _check_wayback_machine(url: str) -> bool:
+    """Return True if the Wayback Machine has a confirmed HTTP-200 snapshot of url."""
+
+    def _make_request():
         response = requests.get(
             "https://archive.org/wayback/available",
             params={"url": url},
             timeout=10,
         )
         response.raise_for_status()
-        data = response.json()
+        return response.json()
+
+    try:
+        data = retry_api_call(_make_request)
         closest = data.get("archived_snapshots", {}).get("closest", {})
-        if closest.get("available") and closest.get("status") == "200":
-            return closest.get("timestamp", "")
-    except Exception:
-        pass
-    return None
+        return bool(closest.get("available") and closest.get("status") == "200")
+    except Exception as exc:
+        logger.debug("Wayback Machine check failed for %s: %s", url, exc)
+        return False
 
 
 class GitHubClient(PlatformClient):
@@ -363,6 +366,7 @@ class GitHubClient(PlatformClient):
 
     def fetch_repo_public_signals(self) -> dict:
         signals = []
+        api_reachable = True
         try:
             query = """
                 query($owner: String!, $name: String!) {
@@ -386,22 +390,35 @@ class GitHubClient(PlatformClient):
                 return response.json()
 
             result = retry_api_call(_make_request)
-            repo = result.get("data", {}).get("repository", {})
-            if not repo.get("isPrivate", True):
+            repo = result.get("data", {}).get("repository") or {}
+            is_private = repo.get("isPrivate", True)
+            if not is_private:
                 signals.append("currently_public")
-            fork_count = repo.get("forkCount", 0)
-            if fork_count > 0:
-                signals.append(f"has_forks:{fork_count}")
-            star_count = repo.get("stargazerCount", 0)
-            if star_count > 0:
-                signals.append(f"has_stars:{star_count}")
-        except Exception:
-            pass
+                fork_count = repo.get("forkCount", 0)
+                if fork_count > 0:
+                    signals.append(f"has_forks:{fork_count}")
+                star_count = repo.get("stargazerCount", 0)
+                if star_count > 0:
+                    signals.append(f"has_stars:{star_count}")
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status in (401, 403):
+                logger.warning(
+                    "GitHub auth failure for %s (%s); marking unknown",
+                    self.repo_full_name,
+                    status,
+                )
+                api_reachable = False
+            else:
+                logger.debug("GitHub API error for %s: %s", self.repo_full_name, exc)
+        except Exception as exc:
+            logger.debug("GitHub API error for %s: %s", self.repo_full_name, exc)
 
-        timestamp = _check_wayback_machine(f"github.com/{self.repo_full_name}")
-        if timestamp:
-            signals.append(f"wayback_snapshot:{timestamp}")
+        if _check_wayback_machine(f"github.com/{self.repo_full_name}"):
+            signals.append("wayback_snapshot")
 
+        if not api_reachable and not signals:
+            return {"state": "unknown", "signals": []}
         return {"state": "positive" if signals else "neutral", "signals": signals}
 
     def get_repo_url(self, include_token: bool = False) -> str:
@@ -715,6 +732,7 @@ class BitbucketClient(PlatformClient):
 
     def fetch_repo_public_signals(self) -> dict:
         signals = []
+        api_reachable = True
         try:
             url = f"{self.base_url}/repositories/{self.owner}/{self.repo_name}"
 
@@ -726,13 +744,25 @@ class BitbucketClient(PlatformClient):
             data = retry_api_call(_make_request)
             if not data.get("is_private", True):
                 signals.append("currently_public")
-        except Exception:
-            pass
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status in (401, 403):
+                logger.warning(
+                    "Bitbucket auth failure for %s (%s); marking unknown",
+                    self.repo_full_name,
+                    status,
+                )
+                api_reachable = False
+            else:
+                logger.debug("Bitbucket API error for %s: %s", self.repo_full_name, exc)
+        except Exception as exc:
+            logger.debug("Bitbucket API error for %s: %s", self.repo_full_name, exc)
 
-        timestamp = _check_wayback_machine(f"bitbucket.org/{self.repo_full_name}")
-        if timestamp:
-            signals.append(f"wayback_snapshot:{timestamp}")
+        if _check_wayback_machine(f"bitbucket.org/{self.repo_full_name}"):
+            signals.append("wayback_snapshot")
 
+        if not api_reachable and not signals:
+            return {"state": "unknown", "signals": []}
         return {"state": "positive" if signals else "neutral", "signals": signals}
 
     def fetch_patch(self, base_commit: str, head_commit: str) -> Optional[str]:
@@ -1064,6 +1094,7 @@ class GitLabClient(PlatformClient):
 
     def fetch_repo_public_signals(self) -> dict:
         signals = []
+        api_reachable = True
         try:
             url = f"{self.api_url}/projects/{self.project_id}"
 
@@ -1074,18 +1105,30 @@ class GitLabClient(PlatformClient):
 
             data = retry_api_call(_make_request)
             visibility = data.get("visibility", "private")
-            if visibility in ("public", "internal"):
+            if visibility == "public":
                 signals.append("currently_public")
-            fork_count = data.get("forks_count", 0)
-            if fork_count > 0:
-                signals.append(f"has_forks:{fork_count}")
-        except Exception:
-            pass
+                fork_count = data.get("forks_count", 0)
+                if fork_count > 0:
+                    signals.append(f"has_forks:{fork_count}")
+        except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
+            if status in (401, 403):
+                logger.warning(
+                    "GitLab auth failure for %s (%s); marking unknown",
+                    self.repo_full_name,
+                    status,
+                )
+                api_reachable = False
+            else:
+                logger.debug("GitLab API error for %s: %s", self.repo_full_name, exc)
+        except Exception as exc:
+            logger.debug("GitLab API error for %s: %s", self.repo_full_name, exc)
 
-        timestamp = _check_wayback_machine(f"gitlab.com/{self.repo_full_name}")
-        if timestamp:
-            signals.append(f"wayback_snapshot:{timestamp}")
+        if _check_wayback_machine(f"gitlab.com/{self.repo_full_name}"):
+            signals.append("wayback_snapshot")
 
+        if not api_reachable and not signals:
+            return {"state": "unknown", "signals": []}
         return {"state": "positive" if signals else "neutral", "signals": signals}
 
     def fetch_patch(self, base_commit: str, head_commit: str) -> Optional[str]:

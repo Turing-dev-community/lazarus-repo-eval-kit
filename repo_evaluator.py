@@ -692,7 +692,7 @@ class RepoMetrics:
     process_health_summary: Dict[str, Any] = None
     enterprise_signals: Optional[Dict[str, Any]] = None
     repo_was_public: str = "neutral"
-    repo_was_public_signals: List[str] = None
+    repo_was_public_signals: Optional[List[str]] = None
 
 
 @dataclass
