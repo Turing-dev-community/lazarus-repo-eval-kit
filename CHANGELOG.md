@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.7.0...v0.8.0) (2026-05-21)
+
+
+### Features
+
+* add repo_was_public field with positive/neutral states ([d593eac](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/d593eaca09e13e5bc940f8245f92643e9a17cb07))
+
 ## [0.7.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.6.2...v0.7.0) (2026-05-19)
 
 
