@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.8.0...v0.8.1) (2026-07-30)
+
+
+### Bug Fixes
+
+* Pin pydantic-ai below 2.0.0 ([#69](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/issues/69)) ([90bba52](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/90bba52fb061a5297751184ad753251a89199b4e))
+
 ## [0.8.0](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.7.0...v0.8.0) (2026-05-21)
 
 
