@@ -120,6 +120,8 @@ class F2PP2PResult:
             "error": self.error,
             "error_code": self.error_code,
             "rejection_reason": self.rejection_reason,
+            "has_valid_f2p": self.has_valid_f2p,
+            "has_valid_p2p": self.has_valid_p2p,
             "has_new_test_file": self.has_new_test_file,
             "runner": self.runner_name,
             "test_file_count": self.test_file_count,
