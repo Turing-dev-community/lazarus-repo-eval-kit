@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.8.1...v0.8.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* Add F2P/P2P validity flags to result dict ([#71](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/issues/71)) ([8e4a886](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/commit/8e4a88666034acb420d711b13979ee1213885f37))
+
 ## [0.8.1](https://github.com/Turing-dev-community/lazarus-repo-eval-kit/compare/v0.8.0...v0.8.1) (2026-07-30)
 
 
